@@ -1,9 +1,5 @@
 open System
 
-// Todo:
-// 1. Move the type to domain.fs
-// 2. verify that the functions here are correct. They are auto-generated.
-
 type HistoricalTransaction = {
     CurrencyPair: CurrencyPair
     BuyPrice: decimal
