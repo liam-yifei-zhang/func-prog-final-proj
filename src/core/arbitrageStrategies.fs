@@ -2,20 +2,6 @@ namespace Core.Strategy
 module ArbitrageStrategies
 open Core.Domain
 
-// The namespace Core.Strategy groups together functionality related to trading strategies within the core domain of the application.
-// It provides a logical organization for code that deals with the implementation and execution of various trading strategies.
-
-// The module ArbitrageStrategies within the Core.Strategy namespace specifically focuses on strategies related to arbitrage trading.
-// Arbitrage trading involves taking advantage of price differences in different markets or exchanges to make a profit.
-
-// The open Core.Domain statement makes the types and functions defined in the Core.Domain module available in this module.
-// This allows the ArbitrageStrategies module to use domain-specific types such as HistoricalQuote without fully qualifying their names.
-
-
-// ToDo: Add function to compute spread for real-time trading
-
-// Function to calculate the spread of a given pair between two crypto exchanges
-// Spread between two exchanges
 let calculateSpread (quote1: HistoricalQuote) (quote2: HistoricalQuote) : float =
     match quote1, quote2 with
     | { Bid = bid1; Ask = ask1 }, { Bid = bid2; Ask = ask2 } ->
