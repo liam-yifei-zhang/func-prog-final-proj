@@ -1,6 +1,15 @@
 open System
 
-let calculateAnnualizedReturn (initialInvestment: decimal) (finalValue: decimal) (years: double) : decimal =
-    let growthRate = finalValue / initialInvestment
-    let annualizedReturn = (growthRate ** (1.0 / years)) - 1.0m
-    annualizedReturn
+let calculateInvestmentDuration (period: InvestmentPeriod) : decimal =
+        let totalDays = (period.EndDate - period.StartDate).TotalDays
+        totalDays / 365m
+
+let calculateInitialInvestment (cashFlows: CashFlow) : decimal =
+    cashFlows.Inflow - cashFlows.Outflow
+
+let calculateAnnualizedReturn (initialInvestment: decimal) (finalValue: decimal) (years: decimal) : decimal =
+    match years > 0m with
+    | true ->
+        let growthRate = finalValue / initialInvestment
+        (growthRate ** (1m / years)) - 1m
+    | false -> 0m
