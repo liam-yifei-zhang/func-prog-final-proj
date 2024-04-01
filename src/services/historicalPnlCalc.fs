@@ -7,7 +7,7 @@ module HistoricalPnLCalculator =
    let calculateHistoricalPnL (startDate: DateTime, endDate: DateTime, event: UserRequestsPnLCalculation) : decimal =
     match event with
         | UserInvokesPnLCalculation (startDate, endDate) ->
-            let transactions = fetchTransactionsFromDb startDate endDate
+            let transactions = fetchHistoricalTransactionsFromDb startDate endDate
             let pnl = calculatePnL transactions
             pnl
         | _ -> printfn "Unsupported event"
