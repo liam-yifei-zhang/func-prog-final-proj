@@ -2,9 +2,6 @@ namespace Core.Domain
 
 module Core.Domain
 
-// Todo:
-// 1. add user settings related types (see write up)
-
 type CurrencyPair = string * string
 
 type HistoricalQuote = {
