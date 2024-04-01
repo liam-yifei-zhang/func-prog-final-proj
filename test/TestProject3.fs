@@ -1,7 +1,3 @@
-// Todo:
-// 1. We need tests for calculateSpread, calculatePnL, calculateAnnualizedReturn, calculateHistoricalPnL
-// 2. Break down the tests into individual files.
-
 module TestProject3
 
 open NUnit.Framework
