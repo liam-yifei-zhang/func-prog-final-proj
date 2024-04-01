@@ -1,7 +1,3 @@
-// Todo:
-// 1. Verify that the code is correct and comply with the write up and psudo code. This code is auto generated.
-// 2. Add error handling (domain error)
-
 type Input = 
     | UserConfiguresAlertThreshold of UserSetsAlertThreshold | UserUpdatesAlertThreshold
     | UserRequestsThresholdReset of UserInvokesThresholdReset
