@@ -1,12 +1,10 @@
 open System
 
-type TransactionType = Buy | Sell
-
-type TransactionRecord = {
-    TransactionType: TransactionType
-    Quantity: decimal
-    Price: decimal
-    TransactionDateTime: DateTime
+type HistoricalTransaction = {
+    CurrencyPair: CurrencyPair
+    BuyPrice: decimal
+    SellPrice: decimal
+    TransactionDate: DateTime
 }
 
 let calculatePnL (transactions: TransactionRecord list) : decimal =
