@@ -20,8 +20,20 @@ The project follows the Onion Architecture to maintain a clean separation of con
 This structure ensures that dependencies flow inwards, with the core at the center, thus facilitating maintainability and scalability.
 
 ## Workflow - file correspondence
+Note that the file we provide may have dependencies from the core folder, those imported files are specified at the top of each file, please refer to the corresponding file in the core folder if you want to check out the dependencies. All important dependecies have their own workflow-related files in the core folder. If you have further questions, please consider email the owner of this repository.
 
 -   **Update User Settings**:
 
     -   `/src/core/domain.fs`
     -   `/src/services/userSettings.fs`
+
+-   **Identify and Store Cryptocurrency Data**:
+
+    -   `/src/core/domain.fs`
+    -   `/src/services/cryptoData.fs`
+
+-   **Identify and Store Historical Arbitrage Opportunities**:
+
+    -   `/src/core/domain.fs`
+    -   `/src/core/domain.fs`
+    -   `/src/services/cryptoData.fs`
