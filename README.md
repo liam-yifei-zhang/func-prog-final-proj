@@ -34,6 +34,35 @@ Note that the file we provide may have dependencies from the core folder, those 
 
 -   **Identify and Store Historical Arbitrage Opportunities**:
 
+    -   `/src/core/arbitrageStrategies.fs`
     -   `/src/core/domain.fs`
+    -   `/src/services/IdentifyHistoricalArvitrage.fs`
+
+-   **Execute Real-time Trading**:
+
     -   `/src/core/domain.fs`
-    -   `/src/services/cryptoData.fs`
+    -   `/src/services/realTimeTrading.fs`
+
+-   **Process Orders**:
+
+    -   `/src/core/domain.fs`
+    -   `/src/services/processOrder.fs`
+
+-   **P&L Calculation**:
+
+    -   `/src/core/domain.fs`
+    -   `/src/services/pnlCalc.fs`
+
+-   **Calculate Annualized Return**:
+
+    -   `/src/core/calcAnnualizedReturn.fs`
+    -   `/src/services/annualizedReturnCalc.fs`
+
+-   **On-Demand historic P&L Calculation**:
+
+    -   `/src/core/CalcPnL.fs`
+    -   `/src/services/historicalPnlCalc.fs`
+
+-   **Configure Alert Threshold**:
+
+    -   `/src/services/alertThresholdConfig.fs`
