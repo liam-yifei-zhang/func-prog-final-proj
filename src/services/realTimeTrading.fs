@@ -39,6 +39,10 @@ type DomainError =
     | NoOpportunityFound
     | InvalidMarketData
 
+type Result<'a, 'b> =
+    | Success of 'a
+    | Failure of 'b
+
 type UpdateResult =
     | OpportunityFound of TradingOpportunity
     | NoOpportunity of DomainError
@@ -48,9 +52,9 @@ let evaluateMarketData (data: MarketData) (parameters: TradingParameter): Update
     | true, false ->
         let quantity = min (parameters.maximalTransactionValue / data.bidPrice) (parameters.maximalTradingValue / data.bidPrice)
         match quantity * data.bidPrice <= parameters.maximalTradingValue with
-        | true -> OpportunityFound { currencyPair = data.currencyPair; buyPrice = data.bidPrice; sellPrice = 0m; buyExchange = data.exchangeName; sellExchange = ""; quantity = quantity }
-        | false -> NoOpportunity ExceedsMaximalTradingValue
-    | false, true | _, _ -> NoOpportunity InvalidMarketData
+        | true -> Success { currencyPair = data.currencyPair; buyPrice = data.bidPrice; sellPrice = 0m; buyExchange = data.exchangeName; sellExchange = ""; quantity = quantity }
+        | false -> Failure ExceedsMaximalTradingValue
+    | false, true | _, _ -> Failure InvalidMarketData
 
 let updateOpportunity (data: MarketData) (opp: TradingOpportunity): UpdateResult =
     match data.exchangeName <> opp.buyExchange && data.askPrice > opp.buyPrice with
@@ -58,9 +62,9 @@ let updateOpportunity (data: MarketData) (opp: TradingOpportunity): UpdateResult
         let profitPerUnit = data.askPrice - opp.buyPrice
         let totalProfit = profitPerUnit * opp.quantity
         match totalProfit > parameters.minimalProfit with
-        | true -> OpportunityFound { opp with sellPrice = data.askPrice; sellExchange = data.exchangeName }
-        | false -> NoOpportunity BelowMinimalProfit
-    | false -> NoOpportunity NoOpportunityFound
+        | true -> Success { opp with sellPrice = data.askPrice; sellExchange = data.exchangeName }
+        | false -> Failure BelowMinimalProfit
+    | false -> Failure NoOpportunityFound
 
 
 let processMarketDataPoint (data: MarketData) (parameters: TradingParameter) (existingOpportunity: Option<TradingOpportunity>) : UpdateResult =
@@ -79,6 +83,7 @@ let processRealTimeDataFeed (dataFeed: seq<MarketData>) (parameters: TradingPara
     Seq.fold (fun (accOpportunity, accOrders) data ->
         let result = processMarketDataPoint data parameters accOpportunity
         match result with
-        | OpportunityFound opp -> (Some opp, accOrders @ generateTradingOrders opp)
-        | NoOpportunity _ -> (accOpportunity, accOrders)
+        | Success opp -> Success (Some opp, accOrders @ generateTradingOrders opp)
+        | Failure NoOpportunityFound -> Success (accOpportunity, accOrders)
+        | Failure err -> Failure err
     ) (None, []) dataFeed

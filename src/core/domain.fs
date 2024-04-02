@@ -68,3 +68,10 @@ type EventQuote = {
     x: int
     r: int
 }
+
+type DomainError =
+    | BelowMinimalProfit
+    | ExceedsMaximalTransactionValue
+    | ExceedsMaximalTradingValue
+    | NoOpportunityFound
+    | InvalidMarketData
