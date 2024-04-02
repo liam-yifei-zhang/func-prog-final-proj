@@ -10,6 +10,7 @@
 open Core.Domain
 open Infra.Db
 open ExchangeApi
+open core.ArbitrageStrategies
 
 type HistoricalValuesFileLoaded = {
     FileName: string

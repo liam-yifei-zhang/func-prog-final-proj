@@ -5,6 +5,7 @@
 
 module AnnualizedReturnCalculator =
     open System
+    open core.calcAnnualizedReturn
 
     // Assuming the existence of a function to retrieve data from the database
     // This function should be implemented to fetch the initial investment and total trading period
