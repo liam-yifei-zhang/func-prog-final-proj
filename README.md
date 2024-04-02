@@ -49,7 +49,7 @@ Note that the file we provide may have dependencies from the core folder, those 
     -   `/src/services/processOrder.fs`
 
 -   **P&L Calculation**:
-
+    -   `/src/core/CalcPnL.fs`
     -   `/src/core/domain.fs`
     -   `/src/services/pnlCalc.fs`
 

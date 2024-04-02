@@ -1,66 +1,28 @@
 module Services.PnLCalculation
+open core.calcPnL
+open Core.Domain  // Assuming Core.Domain contains CurrencyPair and other domain-specific types
 
-open System
-open Core.Domain
+// Reusing the existing Transaction, OrdersProcessed, and CurrentPnLCalculated definitions from your code
 
-// Assuming Core.Domain contains definitions for CurrencyPair, and other domain-specific types
+// Assuming that the helper functions and domain events are defined as in your code
 
-// Define a transaction record
-type Transaction = {
-    CurrencyPair : (string * string)
-    BuyPrice : decimal
-    SellPrice : decimal
-    TransactionDate : DateTime
-}
-
-// Define an OrdersProcessed type (assuming it's a list of Transactions for simplicity)
-type OrdersProcessed = Transaction list
-
-// Define the CurrentPnLCalculated record for reporting
-type CurrentPnLCalculated = {
-    AccumulatedPnL : decimal
-}
-
-// Define the domain event for PnL reporting
-type PnLReportEvent =
-    | AlertThresholdUpdated of ThresholdReset
-    | PnLReportGenerated of CurrentPnLCalculated
-
-// Example implementation of missing functions
-let calculateProfitLoss (transaction: Transaction) =
-    (transaction.SellPrice - transaction.BuyPrice) * 1m
-
-let getUserAlertThreshold () =
-    Some 10000m // Example threshold
-
-let notifyUserViaEmail (pnl: decimal) =
-    printfn "User notified of PnL: %M" pnl
-
-let getUserAutoStopSetting () =
-    false // Example setting
-
-let stopTrading () =
-    printfn "Trading stopped due to PnL threshold breach"
-
-let retrieveCompletedArbitrageTransactionsFromDatabase () =
-    let transactions = [
-        { CurrencyPair = ("BTC", "USD"); BuyPrice = 50000m; SellPrice = 51000m; TransactionDate = DateTime(2021, 12, 1) }
-        { CurrencyPair = ("ETH", "USD"); BuyPrice = 4000m; SellPrice = 4200m; TransactionDate = DateTime(2021, 12, 2) }
-        { CurrencyPair = ("LTC", "USD"); BuyPrice = 200m; SellPrice = 210m; TransactionDate = DateTime(2021, 12, 3) }
+// Converting Transactions to TransactionRecords for P&L calculation
+let transactionToRecords (transaction: Transaction) : TransactionRecord list =
+    [
+        { TransactionType = Buy; Quantity = 1m; Price = transaction.BuyPrice; CurrencyPair = transaction.CurrencyPair; TransactionDate = transaction.TransactionDate }
+        { TransactionType = Sell; Quantity = 1m; Price = transaction.SellPrice; CurrencyPair = transaction.CurrencyPair; TransactionDate = transaction.TransactionDate }
     ]
-    transactions
 
 let workflowPnLCalculation (input: OrdersProcessed) =
-    input
-    |> List.fold (fun acc transaction ->
-        acc + (calculateProfitLoss transaction)
-    ) 0m
-    |> fun accumulatedPnL ->
-        match getUserAlertThreshold() with
-        | Some threshold when accumulatedPnL > threshold ->
-            notifyUserViaEmail accumulatedPnL
-            match getUserAutoStopSetting() with
-            | true -> stopTrading ()
-            | false -> PnLReportGenerated (CurrentPnLCalculated accumulatedPnL)
-        | _ -> PnLReportGenerated (CurrentPnLCalculated accumulatedPnL)
+    let transactionRecords = input |> List.collect transactionToRecords
+    let accumulatedPnL = calculatePnL transactionRecords
+
+    match getUserAlertThreshold() with
+    | Some threshold when accumulatedPnL > threshold ->
+        notifyUserViaEmail accumulatedPnL
+        match getUserAutoStopSetting() with
+        | true -> stopTrading ()
+        | false -> PnLReportGenerated (CurrentPnLCalculated accumulatedPnL)
+    | _ -> PnLReportGenerated (CurrentPnLCalculated accumulatedPnL)
+
 
