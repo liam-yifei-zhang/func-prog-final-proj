@@ -4,15 +4,6 @@ module Core.Domain
 
 type CurrencyPair = string * string
 
-type HistoricalQuote = {
-    Timestamp: int64
-    Pair: string
-    BidPrice: decimal
-    BidSize: decimal
-    AskPrice: decimal
-    AskSize: decimal
-}
-
 type ArbitrageOpportunity = {
     BuyExchange: string
     SellExchange: string
