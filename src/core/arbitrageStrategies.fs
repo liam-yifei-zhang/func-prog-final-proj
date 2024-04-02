@@ -2,44 +2,62 @@ namespace Core.Strategy
 module ArbitrageStrategies
 open Core.Domain
 
-let calculateSpread (quote1: HistoricalQuote) (quote2: HistoricalQuote) : float =
-    match quote1, quote2 with
-    | { Bid = bid1; Ask = ask1 }, { Bid = bid2; Ask = ask2 } ->
-        (ask1 - bid2) + (ask2 - bid1) 
+//assume the input is a list of historical quotes
+(*
+type HistoricalQuote = {
+    Exchange: string
+    CurrencyPair: string CHZ-USD
+    Bid: float
+    Ask: float
+    Timestamp: System.DateTime
+}
+*)
 
-// Function to identify if there is an arbitrage opportunity
-// Arbitrage opportunity exists if spread is positive
-let identifyArbitrageOpportunity (spread: float) : bool =
-    spread > 0.0 
 
-let IdentifyHistoricalArbitrageOpportunities (quotes: HistoricalQuote list) =
+let findArbitrageOpportunities quotesByPair = //Mapping Phase
+    quotesByPair
+    |> List.collect (fun (currencyPair, quotes) ->
+        let exchangeBestBids = 
+            quotes
+            |> List.groupBy (fun q -> q.Exchange)
+            |> List.filter (fun (_, exchangequotes) -> List.length exchangequotes > 1) //filter out the quotes from exchanges that have only one exchange
+            |> List.map (fun (exchange, exchangeQuotes) ->
+                exchangeQuotes |> List.maxBy (fun q -> q.Bid) |> fun quote -> (exchange, quote))
+          
+        exchangeBestBids
+        |> List.collect (fun (bestBidExchange, bestBidQuote) ->
+            quotes
+            |> List.filter (fun quote -> quote.Exchange <> bestBidExchange && quote.CurrencyPair = bestBidQuote.CurrencyPair)
+            |> List.choose (fun quote ->
+                match bestBidQuote.Bid - quote.Ask > 0.01m with
+                | true -> 
+                    Some {
+                        BuyExchange = quote.Exchange
+                        SellExchange = bestBidExchange
+                        CurrencyPair = bestBidQuote.CurrencyPair
+                        BuyPrice = quote.Ask
+                        SellPrice = bestBidQuote.Bid
+                        Timestamp = bestBidQuote.Timestamp
+                    }
+                | false -> None
+            )
+        )
+    )
 
-    // Define the bucket size
-    let bucketSize = TimeSpan.FromMilliseconds(5.0)
-    //calculate the start time of the bucket
-    let startTime = quotes |> List.minBy (fun q -> q.Timestamp) |> fun q -> q.Timestamp
+let summarizeOpportunities opportunities = //Reducing Phase
+    opportunities
+    |> List.groupBy (fun op -> op.CurrencyPair)
+    |> List.map (fun (currencyPair, ops) -> sprintf "%s; %d" currencyPair (List.length ops))
 
-    quotes
-    |> List.groupBy (fun q -> //group by the bucket
-        let elapsed = q.Timestamp - startTimestamp
-        elapsed.Ticks / bucketSize.Ticks)
-    |> List.collect (fun (bucket, qs) ->
-        // In each bucket, for quotes from more than one exchange:
-        let groupedByExchange = qs |> List.groupBy (fun q -> q.Exchange)
-                match groupedByExchange with
-                | _ when groupedByExchange.Length > 1 -> 
-                    groupedByExchange
-                    |> List.map (fun (exchange, eqs) ->
-                        eqs |> List.maxBy (fun q -> q.Bid),
-                        eqs |> List.minBy (fun q -> q.Ask))
-                    |> List.collect (fun (bidQuote, askQuote) ->
-                        match bidQuote, askQuote with
-                        | bid, ask when bid.CurrencyPair = ask.CurrencyPair && (ask.Ask - bid.Bid) > 0.01f ->
-                            [{ CurrencyPair = bid.CurrencyPair; NumberOfOpportunities = 1 }]
-                        | _ -> [])
-                // If there is only one exchange in the bucket
-                | _ -> [])
-    |> List.groupBy (fun opp -> opp.CurrencyPair)
-    |> List.map (fun (currencyPair, opportunities) ->
-        { CurrencyPair = currencyPair; NumberOfOpportunities = List.length opportunities })
+let IdentifyHistoricalArbitrageOpportunities (quotes: HistoricalQuote list) =       
+//Main Function: Utilizing the above two functions.
+    let groupedQuotes = 
+        quotes
+        |> List.groupBy (fun q -> q.Timestamp % 5)
+        |> List.collect (fun (_, quotesInBucket) ->
+            quotesInBucket
+            |> List.groupBy (fun q -> q.CurrencyPair))
+    let opportunities = groupedQuotes |> List.collect findArbitrageOpportunities
+    summarizeOpportunities opportunities
+
     

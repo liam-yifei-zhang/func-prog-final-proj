@@ -7,13 +7,10 @@ type HistoricalTransaction = {
     TransactionDate: DateTime
 }
 
-let calculateAllHistoricalPnL (transactions: HistoricalTransaction list) =
-    transactions
-    |> List.map (fun t -> t.SellPrice - t.BuyPrice)
-    |> List.sum
-
-let calculatePnLWithTimeRange (transactions: HistoricalTransaction list) (startDate: DateTime) (endDate: DateTime) =
-    transactions
-    |> List.filter (fun t -> t.TransactionDate >= startDate && t.TransactionDate <= endDate)
-    |> List.map (fun t -> t.SellPrice - t.BuyPrice)
-    |> List.sum
+let calculatePnL (transactions: TransactionRecord list) : decimal =
+    transactions 
+    |> List.fold (fun acc t ->
+        match t.TransactionType with
+        | Buy -> acc - (t.Quantity * t.Price) // Subtracting cost of buys from accumulated value
+        | Sell -> acc + (t.Quantity * t.Price) // Adding revenue from sells to accumulated value
+    ) 0m

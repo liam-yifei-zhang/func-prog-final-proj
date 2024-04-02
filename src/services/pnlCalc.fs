@@ -1,13 +1,46 @@
-// Todo:
-// 1. CalculatePnL needs to be implemented, but should be put in the core folder.
-// 2. Replace calculatePnL with workflowPnLCalculation, but verify the code correctness. It's auto generated.
-// 3. Add error handling
-
 module Services.PnLCalculation
 
+open System
 open Core.Domain
 
+// Assuming Core.Domain contains definitions for CurrencyPair, and other domain-specific types
 
+// Define a transaction record
+type Transaction = {
+    CurrencyPair : (string * string)
+    BuyPrice : decimal
+    SellPrice : decimal
+    TransactionDate : DateTime
+}
+
+// Define an OrdersProcessed type (assuming it's a list of Transactions for simplicity)
+type OrdersProcessed = Transaction list
+
+// Define the CurrentPnLCalculated record for reporting
+type CurrentPnLCalculated = {
+    AccumulatedPnL : decimal
+}
+
+// Define the domain event for PnL reporting
+type PnLReportEvent =
+    | AlertThresholdUpdated of ThresholdReset
+    | PnLReportGenerated of CurrentPnLCalculated
+
+// Example implementation of missing functions
+let calculateProfitLoss (transaction: Transaction) =
+    (transaction.SellPrice - transaction.BuyPrice) * 1m
+
+let getUserAlertThreshold () =
+    Some 10000m // Example threshold
+
+let notifyUserViaEmail (pnl: decimal) =
+    printfn "User notified of PnL: %M" pnl
+
+let getUserAutoStopSetting () =
+    false // Example setting
+
+let stopTrading () =
+    printfn "Trading stopped due to PnL threshold breach"
 
 let retrieveCompletedArbitrageTransactionsFromDatabase () =
     let transactions = [
@@ -19,12 +52,8 @@ let retrieveCompletedArbitrageTransactionsFromDatabase () =
 
 let workflowPnLCalculation (input: OrdersProcessed) =
     input
-    |> retrieveCompletedArbitrageTransactionsFromDatabase
     |> List.fold (fun acc transaction ->
-        match transaction with
-        | "buy" -> acc + (calculateProfitLoss transaction)
-        | "sell" -> acc + (calculateProfitLoss transaction)
-        | _ -> acc
+        acc + (calculateProfitLoss transaction)
     ) 0m
     |> fun accumulatedPnL ->
         match getUserAlertThreshold() with
@@ -32,10 +61,6 @@ let workflowPnLCalculation (input: OrdersProcessed) =
             notifyUserViaEmail accumulatedPnL
             match getUserAutoStopSetting() with
             | true -> stopTrading ()
-            | false -> AlertThresholdUpdated ThresholdReset
+            | false -> PnLReportGenerated (CurrentPnLCalculated accumulatedPnL)
         | _ -> PnLReportGenerated (CurrentPnLCalculated accumulatedPnL)
 
-// Events
-type PnLReportGenerated = CurrentPnLCalculated
-
-// Domain type

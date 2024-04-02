@@ -1,38 +1,60 @@
-// Todo:
-// 1. Move the calculateAnnualizedReturn function to core folder
-// 2. Verify the code against the privided write up
-// 3. Add error handling (domain error)
-
 module AnnualizedReturnCalculator =
     open System
-    open core.calcAnnualizedReturn
+    open Core.CalcAnnualizedReturn
 
-    // Assuming the existence of a function to retrieve data from the database
-    // This function should be implemented to fetch the initial investment and total trading period
-    let fetchInvestmentDataFromDb () =
-        // Placeholder: Implement database retrieval logic here
+    type CashFlow = {
+        Inflow: decimal
+        Outflow: decimal
+    }
+
+    type InvestmentPeriod = {
+        StartDate: DateTime
+        EndDate: DateTime
+    }
+
+    type InvestmentData = {
+        Period: InvestmentPeriod
+        DayOneCashFlows: CashFlow
+        FinalValue: decimal
+    }
+
+    type InvokeAnnualizedReturnCalculation = unit  // Placeholder for user invocation details
+
+    type DomainError = 
+        | InvalidInvestmentData
+        | InvalidDuration
+        | InvalidFinalValue
+
+    let fetchInvestmentDataFromDb (): Async<InvestmentData> =
         async {
-            // Simulated database response
-            let initialInvestment = 1000m // Example value
-            let totalTradingPeriodYears = 5m // Example value
-            return (initialInvestment, totalTradingPeriodYears, 1500m) // Example final value
+            // let startDate = DateTime(2023, 1, 1)
+            // let endDate = DateTime(2023, 6, 30)
+            // let dayOneCashFlows = { Inflow = 1000m; Outflow = 200m }
+            // let finalValue = 1500m
+            return { Period = { StartDate = startDate; EndDate = endDate }; DayOneCashFlows = dayOneCashFlows; FinalValue = finalValue }
         }
 
-    let calculateAnnualizedReturn (initialInvestment: decimal) (finalValue: decimal) (years: decimal) : decimal =
-        let growthRate = finalValue / initialInvestment
-        let annualizedReturn = (growthRate ** (1m / years)) - 1m
-        annualizedReturn
 
     let emitAnnualizedReturnCalculatedEvent (annualizedReturn: decimal) =
-        // Placeholder: Implement event emission logic here
         printfn "Annualized Return Calculated: %A" annualizedReturn
 
-    let calculateAnnualizedReturnWorkflow () =
+    let calculateAnnualizedReturnWorkflow (invokeData: InvokeAnnualizedReturnCalculation) =
         async {
-            let! (initialInvestment, totalTradingPeriodYears, finalValue) = fetchInvestmentDataFromDb ()
-            let annualizedReturn = calculateAnnualizedReturn initialInvestment finalValue totalTradingPeriodYears
-            emitAnnualizedReturnCalculatedEvent annualizedReturn
+            let! investmentData = fetchInvestmentDataFromDb ()
+            let durationYears = calculateInvestmentDuration investmentData.Period
+            let initialInvestment = calculateInitialInvestment investmentData.DayOneCashFlows
+            let finalValue = investmentData.FinalValue
+
+            match initialInvestment > 0m && durationYears > 0m && finalValue >= initialInvestment with
+            | true ->
+                let annualizedReturn = calculateAnnualizedReturn initialInvestment finalValue durationYears
+                return emitAnnualizedReturnCalculatedEvent annualizedReturn
+            | false ->
+                let domainError = 
+                    match initialInvestment, durationYears, finalValue with
+                    | _, _, _ when initialInvestment <= 0m || finalValue < initialInvestment -> InvalidInvestmentData
+                    | _, duration, _ when duration <= 0m -> InvalidDuration
+                    | _, _, final when final < 0m -> InvalidFinalValue
+                    | _ -> InvalidInvestmentData
+                return domainError
         }
-
-
-    
