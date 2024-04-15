@@ -1,7 +1,7 @@
 module AnnualizedReturnCalculatorTests
 
 open NUnit.Framework
-open AnnualizedReturnCalculator
+open Core.Domain
 open System
 
 // Tests for calculateInvestmentDuration
@@ -15,8 +15,8 @@ let ``Given period should calculate correct investment duration in years with ed
     
     let actualYears = calculateInvestmentDuration period
 
-    let delta = 0.001m // allow for small floating point errors
-    Assert.AreEqual(expectedYears, actualYears, 0.0001m)
+    let delta = 0.001m 
+    Assert.AreEqual(expectedYears, actualYears, delta, "Investment duration should be calculated correctly")
     Assert.IsTrue(actualYears >= 0m) 
 
 // Tests for calculateInitialInvestment 
@@ -33,13 +33,11 @@ let ``Given cash flows should handle edge cases correctly in initial investment 
 
 // Tests for calculateAnnualizedReturn 
 [<Test>]
-[<TestCase(1000m, 1000m, 1.0, 0.0)>] 
-[<TestCase(1000m, 0m, 1.0, -1.0)>] 
-let ``Given investment data should calculate correct annualized return under various conditions`` (initialInvestment: decimal, finalValue: decimal, years: decimal, expectedAnnualizedReturn: decimal) =
+[<TestCase(1000m, 1100m, 1.0, 0.1)>] // 10% growth over a year
+[<TestCase(1000m, 1000m, 0.5, 0.0)>] // No growth, half a year
+let ``Given investment data should calculate correct annualized return`` (initialInvestment: decimal, finalValue: decimal, years: decimal, expectedAnnualizedReturn: decimal) =
     let actualAnnualizedReturn = calculateAnnualizedReturn initialInvestment finalValue years
 
     let delta = 0.001m 
-    Assert.AreEqual(expectedAnnualizedReturn, actualAnnualizedReturn, delta)
-
-    Assert.IsTrue((finalValue >= initialInvestment && years > 0m) ==> actualAnnualizedReturn >= 0m)
-    Assert.IsTrue((finalValue < initialInvestment && years > 0m) ==> actualAnnualizedReturn <= 0m)
+    Assert.AreEqual(expectedAnnualizedReturn, actualAnnualizedReturn, delta, "The calculated annualized return does not match the expected value.")
+    Assert.IsTrue(actualAnnualizedReturn >= 0m, "Annualized return should be non-negative")

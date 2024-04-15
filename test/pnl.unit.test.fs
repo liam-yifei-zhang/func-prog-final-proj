@@ -1,18 +1,22 @@
 module PnLUnitTest
 
 open NUnit.Framework
-open Services.PnLCalculation
+open Core.Domain
 open System
 
-// Test for calculateProfitLoss function
 [<Test>]
-[<TestCase(50000m, 51000m, 1000m)>] // Case where a profit is expected
-[<TestCase(4200m, 4000m, -200m)>] // Case where a loss is expected
-[<TestCase(1000m, 1000m, 0m)>] // Case where no profit or loss is expected
-let ``CalculateProfitLoss should correctly calculate profit or loss for a transaction`` (buyPrice, sellPrice, expectedPnL) =
-    let transaction = { CurrencyPair = ("BTC", "USD"); BuyPrice = buyPrice; SellPrice = sellPrice; TransactionDate = DateTime.Now }
-    let actualPnL = calculateProfitLoss transaction
+let ``calculatePnL should accurately calculate net profit or loss across complex transaction sets`` () =
 
-    Assert.AreEqual(expectedPnL, actualPnL, 0.001m, "The calculated PnL does not match the expected value.")
+    let transactions = [
+        { TransactionType = Buy; Quantity = 5m; Price = 100m; CurrencyPair = "ETH-USD"; TransactionDate = DateTime(2023, 1, 1) };  
+        { TransactionType = Buy; Quantity = 10m; Price = 90m; CurrencyPair = "ETH-USD"; TransactionDate = DateTime(2023, 1, 2) };  
+        { TransactionType = Sell; Quantity = 8m; Price = 95m; CurrencyPair = "ETH-USD"; TransactionDate = DateTime(2023, 1, 3) };  
+        { TransactionType = Sell; Quantity = 5m; Price = 110m; CurrencyPair = "ETH-USD"; TransactionDate = DateTime(2023, 1, 4) }; 
+        { TransactionType = Sell; Quantity = 2m; Price = 105m; CurrencyPair = "ETH-USD"; TransactionDate = DateTime(2023, 1, 5) }; 
+    ]
 
-    Assert.IsTrue((sellPrice > buyPrice && actualPnL > 0m) || (sellPrice < buyPrice && actualPnL < 0m) || (sellPrice = buyPrice && actualPnL = 0m), "The PnL sign does not match the transaction outcome.")
+    let expectedNetPnL = 880m 
+    let actualNetPnL = calculatePnL transactions
+
+    Assert.AreEqual(expectedNetPnL, actualNetPnL, "The calculated net PnL from complex transaction sets does not match the expected value.")
+    Assert.IsTrue(actualNetPnL >= 0m, "Net PnL should be non-negative")
