@@ -223,12 +223,28 @@ let storeOrderUpdateInDatabase order updateType additionalOrderOption =
         ) |> List.map BsonDocument
     insertManyDocuments documents |> ignore
 
-let emitEvent (event: Event) =
+let emitEvent (event: Event) getUserEmail =
     match event with
-    | OrderFulfillmentUpdated update -> printfn "Order Fulfillment Updated: %A" update
-    | UserNotificationSent message -> printfn "User Notification Sent: %s" message
-    | OrderInitiated orderID -> printfn "Order Initiated: %s" orderID
-    | OrderProcessed update -> printfn "Order Processed: %A" update
+    | OrderFulfillmentUpdated update ->
+        printfn "Order Fulfillment Updated: %A" update
+
+    | UserNotificationSent message ->
+        let userEmail = getUserEmail
+        let emailSubject = "Trading Notification"
+        let emailBody = sprintf "Attention: %s" message
+        notifyUserViaEmail userEmail emailSubject emailBody
+        printfn "User Notification Sent: %s to %s" emailBody userEmail
+
+    | OrderInitiated orderID ->
+        printfn "Order Initiated: %s" orderID
+
+    | OrderProcessed update ->
+        let userEmail = getUserEmail
+        let emailSubject = "Order Processed Notification"
+        let message = sprintf "Your order has been fully processed."
+        let emailBody = sprintf "Attention: %s" message
+        notifyUserViaEmail userEmail emailSubject emailBody
+        printfn "Order Processed: %A" update
 
 let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingParameter) =
     input.Orders
@@ -236,7 +252,8 @@ let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingPar
         let currentTransactionValue = acc + order.TransactionValue
         if currentTransactionValue > parameters.maximalTransactionValue then
             let errorEvent = DomainErrorRaised "Maximal transaction value exceeded. Halting trading."
-            (acc, results @ [errorEvent])
+            let notificationEvent = UserNotificationSent "Maximal transaction value exceeded. Halting trading."
+            (acc, results @ [notificationEvent; errorEvent])
         else
             let orderDetails = { Currency = order.Currency; Price = order.Price; OrderType = order.OrderType; Quantity = order.Quantity; Exchange = order.Exchange }
             let result = 
@@ -248,24 +265,31 @@ let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingPar
                         let! statusResult = retrieveAndUpdateOrderStatus orderID orderDetails
                         match statusResult with
                         | Result.Ok orderUpdate ->
-                            match orderUpdate.FulfillmentStatus with
+                            let updateEvent = match orderUpdate.FulfillmentStatus with
                             | "FullyFulfilled" ->
                                 storeOrderUpdateInDatabase order "Complete" None
-                                return FullTransactionStored orderUpdate
+                                OrderProcessed orderUpdate
                             | _ ->
                                 storeOrderUpdateInDatabase order "Partial" (Some order)
-                                return PartialTransactionStored orderUpdate
+                                OrderFulfillmentUpdated orderUpdate
+                            emitEvent updateEvent input.UserEmail
+                            updateEvent
                         | Result.Error errMsg ->
-                            return DomainErrorRaised errMsg
+                            UserNotificationSent errMsg
                     | Result.Error errMsg ->
-                        return DomainErrorRaised errMsg
+                        UserNotificationSent errMsg
                 } |> Async.RunSynchronously
             (currentTransactionValue, results @ [result])
     ) (0m, [])
     |> snd
-    |> List.iter emitEvent
+    |> List.iter (fun event -> emitEvent event input.UserEmail)
 
 // Example usage:
-// let invokeProcessing = { Orders = [{ Currency = "BTC"; Price = 10000.0; OrderType = "Buy"; Quantity = 1.0; Exchange = "Bitfinex"; TransactionValue = 10000m }]; UserEmail = "user@example.com" }
-// let tradingParams = { maximalTransactionValue = 50000m }
-// workflowProcessOrders invokeProcessing tradingParams
+// let orders = [
+//     { Currency = "BTC"; Price = 50000.0; OrderType = "Buy"; Quantity = 0.1; TransactionValue = 5000.0; TotalQuantity = 0.1; FilledQuantity = 0.0; Exchange = "Bitstamp" }
+//     { Currency = "ETH"; Price = 2000.0; OrderType = "Sell"; Quantity = 1.0; TransactionValue = 2000.0; TotalQuantity = 1.0; FilledQuantity = 0.0; Exchange = "Kraken" }
+// ]
+
+// let input = { Orders = orders; UserEmail = "    " } // Placeholder for user email
+// let parameters = { maximalTransactionValue = 10000.0 }
+// workflowProcessOrders input parameters
