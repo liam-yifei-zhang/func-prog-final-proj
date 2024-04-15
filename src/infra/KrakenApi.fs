@@ -116,3 +116,22 @@ let queryOrdersInfo (transactionIds: string) (includeTrades: bool) (userRef: int
             return parseKrakenOrderResponse responseString
         | _ -> return Result.Error "Failed to query order info due to HTTP error"
     }
+
+let fetchKrakenPairs = async {
+    let url = "https://api.kraken.com/0/public/AssetPairs"
+    try
+        let! response = httpClient.GetAsync(url) |> Async.AwaitTask
+        if response.IsSuccessStatusCode then
+            let! jsonResponse = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            let parsedJson = JsonConvert.DeserializeObject<JObject>(jsonResponse)
+            let pairs = parsedJson.["result"]
+                        |> JObject.Properties
+                        |> Seq.map (fun p -> p.Name)
+                        |> Seq.toList
+            return Result.Ok pairs
+        else
+            return Result.Error "Failed to fetch Kraken pairs due to HTTP error."
+    with
+    | ex ->
+        return Result.Error (sprintf "Failed to fetch Kraken pairs: %s" ex.Message)
+}

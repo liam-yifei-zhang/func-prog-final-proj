@@ -74,3 +74,15 @@ let retrieveOrderTrades (symbol: string) (orderId: int) =
         | false ->
             return None
     }
+
+let fetchBitfinexPairs = async {
+    let url = "https://api-pub.bitfinex.com/v2/conf/pub:list:pair:exchange"
+    try
+        let! response = httpClient.GetStringAsync(url) |> Async.AwaitTask
+        let data = JArray.Parse(response).[0] |> JArray
+        let pairs = data.Values<string>() |> Seq.toList
+        return Result.Ok pairs
+    with
+    | ex -> 
+        return Result.Error (sprintf "Failed to fetch Bitfinex pairs: %s" ex.Message)
+}

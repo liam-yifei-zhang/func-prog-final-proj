@@ -71,3 +71,20 @@ let orderStatus (orderId: string) =
     let url = "https://www.bitstamp.net/api/v2/order_status/"
     let data = [ "id", orderId ]
     postRequest url data
+
+let fetchBitstampPairs = async {
+    let url = "https://www.bitstamp.net/api/v2/trading-pairs-info/"
+    try
+        let! response = httpClient.GetAsync(url) |> Async.AwaitTask
+        if response.IsSuccessStatusCode then
+            let! jsonResponse = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            let pairs = JsonConvert.DeserializeObject<_[]>(jsonResponse)
+            let symbolList = pairs |> Array.map (fun x -> x.["url_symbol"].ToString())
+            return Result.Ok symbolList
+        else
+            return Result.Error "Failed to fetch Bitstamp pairs due to HTTP error."
+    with
+    | ex ->
+        return Result.Error (sprintf "Failed to fetch Bitstamp pairs: %s" ex.Message)
+}
+
