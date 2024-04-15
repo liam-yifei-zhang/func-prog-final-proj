@@ -1,6 +1,42 @@
+module MongoDBUtil =
+
+    open MongoDB.Driver
+    open MongoDB.Bson
+    open System
+
+    let connectionString = "your_connection_string_here"
+    let databaseName = "cryptoDatabase"
+    let collectionName = "transactions"
+
+    let client = MongoClient(connectionString)
+    let database = client.GetDatabase(databaseName)
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+
+    let insertDocument (document: BsonDocument) =
+        try
+            collection.InsertOne(document)
+            true
+        with
+        | ex: Exception ->
+            printfn "Error inserting document: %s" ex.Message
+            false
+
+    let insertManyDocuments (documents: BsonDocument list) =
+        try
+            collection.InsertMany(documents)
+            true
+        with
+        | ex: Exception ->
+            printfn "Error inserting documents: %s" ex.Message
+            false
+
+
+
 module Services.ProcessOrder
 
 open Core.Domain
+open MongoDBUtil
+open MongoDB.Bson
 open System
 open System.Net.Http
 open BitfinexAPI
@@ -41,6 +77,7 @@ type InvokeOrderProcessing = {
     UserEmail: string
 }
 
+    
 type OrdersProcessed =
     | FullTransactionStored of OrderUpdate
     | PartialTransactionStored of OrderUpdate
@@ -209,3 +246,38 @@ let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingPar
 // let parameters = { maximalTransactionValue = 10000.0m }
 
 // workflowProcessOrders input parameters
+
+let storeCompletedTransactionInDatabase (order: Order) =
+    let document = BsonDocument([
+        ("Type", BsonString("Complete"))
+        ("TotalQuantity", BsonDouble(order.TotalQuantity))
+        ("FilledQuantity", BsonDouble(order.FilledQuantity))
+        ("TransactionValue", BsonDouble(order.TransactionValue))
+    ])
+    insertDocument document |> ignore
+
+let storeCompletedAndAdditionalOrdersInDatabase (originalOrder: Order) (additionalOrder: Order) =
+    let documents = [
+        BsonDocument([
+            ("Type", BsonString("Original"))
+            ("TotalQuantity", BsonDouble(originalOrder.TotalQuantity))
+            ("FilledQuantity", BsonDouble(originalOrder.FilledQuantity))
+            ("TransactionValue", BsonDouble(originalOrder.TransactionValue))
+        ])
+        BsonDocument([
+            ("Type", BsonString("Additional"))
+            ("TotalQuantity", BsonDouble(additionalOrder.TotalQuantity))
+            ("FilledQuantity", BsonDouble(additionalOrder.FilledQuantity))
+            ("TransactionValue", BsonDouble(additionalOrder.TransactionValue))
+        ])
+    ]
+    insertManyDocuments documents |> ignore
+
+let storeTransactionAttemptInDatabase (order: Order) =
+    let document = BsonDocument([
+        ("Type", BsonString("Attempt"))
+        ("TotalQuantity", BsonDouble(order.TotalQuantity))
+        ("FilledQuantity", BsonDouble(order.FilledQuantity))
+        ("TransactionValue", BsonDouble(order.TransactionValue))
+    ])
+    insertDocument document |> ignore
