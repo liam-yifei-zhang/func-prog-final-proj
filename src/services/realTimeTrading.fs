@@ -2,6 +2,13 @@ module Services.RealTimeTrading
 open Core.Domain
 open Infra.RealTimeTrading
 
+open System
+open System.Net
+open System.Net.WebSockets
+open System.Threading
+open System.Text
+open System.Text.Json
+
 type TradingParameter = {
     minimalPriceSpread: decimal
     minimalProfit: decimal
@@ -109,6 +116,45 @@ let processRealTimeDataFeed (dataFeed: seq<MarketData>) (parameters: TradingPara
         | Failure err -> Failure err
     ) (None, []) dataFeed
 
+// define a clientWebSocket
+let mutable private currentWebSocketClient: ClientWebSocket option = None
+
+// connect to a WebSocket
+let connectToWebSocket (uri: Uri) : Async<ClientWebSocket> = async {
+    let client = new ClientWebSocket()
+    do! client.ConnectAsync(uri, CancellationToken.None) |> Async.AwaitTask
+    currentWebSocketClient <- Some client
+    return client
+}
+
+// disconnect from a WebSocket
+let disconnectWebSocket () : Async<unit> = async {
+    match currentWebSocketClient with
+    | Some client when not client.CloseStatus.HasValue ->
+        do! client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stopping Trading", CancellationToken.None) |> Async.AwaitTask
+        currentWebSocketClient <- None
+    | _ -> ()
+}
+
+
+let startTrading (uri: Uri, apiKey: string, subscriptionParameters: string) : Async<unit> = async {
+    let! wsClient = connectToWebSocket uri
+    currentWebSocketClient <- Some wsClient
+    do! sendJsonMessage wsClient { action = "auth"; params = apiKey }
+    do! sendJsonMessage wsClient { action = "subscribe"; params = subscriptionParameters }
+    return! receiveData wsClient
+}
+
+
+let stopTrading () : Async<unit> = disconnectWebSocket()
+
+// send a JSON message to the WebSocket
+let sendJsonMessage (wsClient: ClientWebSocket) message =
+    let messageJson = JsonSerializer.Serialize(message)
+    let messageBytes = Encoding.UTF8.GetBytes(messageJson)
+    async {
+        do! wsClient.SendAsync(ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, CancellationToken.None) |> Async.AwaitTask
+    } |> Async.RunSynchronously
 
     [<EntryPoint>]
 let main args =
@@ -116,4 +162,7 @@ let main args =
     let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
     let subscriptionParameters = "XT.BTC-USD"
     start (uri, apiKey, subscriptionParameters) |> Async.RunSynchronously
+
+    Async.Start (startTrading (uri, apiKey, subscriptionParameters))
+    
     0   

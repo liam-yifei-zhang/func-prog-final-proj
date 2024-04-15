@@ -8,6 +8,10 @@ open Newtonsoft.Json.Linq
 
 open MongoDB.Driver
 
+open BitfinexAPI
+open BitstampAPI
+open KrakenAPI
+
 module MongoDBUtil =
 
     let connectionString = "your_connection_string_here" // Replace with MongoDB Atlas connection string
@@ -69,6 +73,23 @@ module CryptoExchangeData =
         |> Seq.filter (fun (_, grouped) -> Seq.length grouped = exchanges.Length) // Filter pairs present in all exchanges
         |> Seq.map fst
 
+    let fetchAllPairs = async {
+    let! bitfinexResult = BitfinexAPI.fetchBitfinexPairs()
+    let! bitstampResult = BitstampAPI.fetchBitstampPairs()
+    let! krakenResult = KrakenAPI.fetchKrakenPairs()
+    match (bitfinexResult, bitstampResult, krakenResult) with
+    | (Result.Ok bitfinexPairs, Result.Ok bitstampPairs, Result.Ok krakenPairs) ->
+        return Result.Ok (bitfinexPairs, bitstampPairs, krakenPairs)
+    | _ ->
+        return Result.Error "Failed to fetch pairs from one or more exchanges."
+    }
+
+    let findCommonPairsByHash (bitfinexPairs, bitstampPairs, krakenPairs) =
+        let commonPairs = HashSet<_>(bitfinexPairs)
+        commonPairs.IntersectWith(HashSet<_>(bitstampPairs))
+        commonPairs.IntersectWith(HashSet<_>(krakenPairs))
+        commonPairs
+
     let storePairsInMongo (pairs: seq<string>) =
         pairs |> Seq.iter (fun pair ->
             let document = BsonDocument()
@@ -77,7 +98,14 @@ module CryptoExchangeData =
             printfn "Stored pair: %s" pair
         )
 
+    let readAllPairs () =
+        collection.Find(Builders<BsonDocument>.Filter.Empty).ToEnumerable()
+        |> Seq.map (fun document -> document["pair"].AsString)
+        |> Seq.toList
+    
 // Usage
 let pairs = fetchAndParseAllPairs
 let commonPairs = findCommonPairs pairs
 storePairsInMongo commonPairs
+fetchAllPairs
+storePairsInMongo findCommonPairsByHash
