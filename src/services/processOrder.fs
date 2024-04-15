@@ -194,6 +194,35 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
             return Result.Error "Unsupported exchange" |> Async.Result
     }
 
+let storeOrderInDatabase order orderType =
+    let document = [
+        ("Type", orderType)
+        ("TotalQuantity", order.TotalQuantity)
+        ("FilledQuantity", order.FilledQuantity)
+        ("TransactionValue", order.TransactionValue)
+    ] |> BsonDocument
+    insertDocument document |> ignore
+
+let storeOrderUpdateInDatabase order updateType additionalOrderOption =
+    let documents = 
+        [
+            [
+                ("Type", "Original - " + updateType)
+                ("TotalQuantity", order.TotalQuantity)
+                ("FilledQuantity", order.FilledQuantity)
+                ("TransactionValue", order.TransactionValue)
+            ]
+        ] @
+        additionalOrderOption |> List.map (fun ao ->
+            [
+                ("Type", "Additional - " + updateType)
+                ("TotalQuantity", ao.TotalQuantity)
+                ("FilledQuantity", ao.FilledQuantity)
+                ("TransactionValue", ao.TransactionValue)
+            ]
+        ) |> List.map BsonDocument
+    insertManyDocuments documents |> ignore
+
 let emitEvent (event: Event) =
     match event with
     | OrderFulfillmentUpdated update -> printfn "Order Fulfillment Updated: %A" update
@@ -202,82 +231,41 @@ let emitEvent (event: Event) =
     | OrderProcessed update -> printfn "Order Processed: %A" update
 
 let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingParameter) =
-    let processOrder (cumulativeTransactionValue, results) order =
-        let orderDetails = { Currency = order.Currency; Price = order.Price; OrderType = order.OrderType; Quantity = order.Quantity; Exchange = order.Exchange }
-        let result =
-            async {
-                emitEvent (OrderInitiated "Order ID placeholder")  // Placeholder for actual order ID
-                let! orderResult = submitOrderAsync orderDetails
-                let! statusResult = retrieveAndUpdateOrderStatus orderID orderDetails
-                let event =
-                    match orderResult, statusResult with
-                    | Result.Ok orderID, Result.Ok orderUpdate ->
-                        emitEvent (OrderInitiated orderID)
-                        match orderUpdate.FulfillmentStatus with
-                        | "FullyFulfilled" -> OrderProcessed orderUpdate
-                        | _ -> OrderFulfillmentUpdated orderUpdate
-                    | Result.Error errMsg, _ ->
-                        emitEvent (UserNotificationSent errMsg)
-                        DomainErrorRaised errMsg
-                    | _, Result.Error errMsg ->
-                        emitEvent (UserNotificationSent errMsg)
-                        DomainErrorRaised errMsg
-                emitEvent event
-                match event with
-                | OrderProcessed update -> FullTransactionStored update
-                | OrderFulfillmentUpdated update -> PartialTransactionStored update
-                | DomainErrorRaised error -> DomainErrorRaised error
-            }
-            |> Async.RunSynchronously
-        (cumulativeTransactionValue + order.TransactionValue, results @ [result])
-
-    let _, orderResults = input.Orders |> List.fold processOrder (0m, [])
-    
-    orderResults |> List.iter (function
-        | OrdersProcessed result -> emitEvent result)
+    input.Orders
+    |> List.fold (fun (acc, results) order ->
+        let currentTransactionValue = acc + order.TransactionValue
+        if currentTransactionValue > parameters.maximalTransactionValue then
+            let errorEvent = DomainErrorRaised "Maximal transaction value exceeded. Halting trading."
+            (acc, results @ [errorEvent])
+        else
+            let orderDetails = { Currency = order.Currency; Price = order.Price; OrderType = order.OrderType; Quantity = order.Quantity; Exchange = order.Exchange }
+            let result = 
+                async {
+                    let! orderResult = submitOrderAsync orderDetails
+                    match orderResult with
+                    | Result.Ok orderID ->
+                        storeOrderInDatabase order "Attempt"
+                        let! statusResult = retrieveAndUpdateOrderStatus orderID orderDetails
+                        match statusResult with
+                        | Result.Ok orderUpdate ->
+                            match orderUpdate.FulfillmentStatus with
+                            | "FullyFulfilled" ->
+                                storeOrderUpdateInDatabase order "Complete" None
+                                return FullTransactionStored orderUpdate
+                            | _ ->
+                                storeOrderUpdateInDatabase order "Partial" (Some order)
+                                return PartialTransactionStored orderUpdate
+                        | Result.Error errMsg ->
+                            return DomainErrorRaised errMsg
+                    | Result.Error errMsg ->
+                        return DomainErrorRaised errMsg
+                } |> Async.RunSynchronously
+            (currentTransactionValue, results @ [result])
+    ) (0m, [])
+    |> snd
+    |> List.iter emitEvent
 
 // Example usage:
-// let orders = [
-//     { Currency = "BTC"; Price = 50000.0; OrderType = "Buy"; Quantity = 0.1; TransactionValue = 5000.0m; TotalQuantity = 0.1m; FilledQuantity = 0.0m }
-//     { Currency = "ETH"; Price = 2000.0; OrderType = "Sell"; Quantity = 1.0; TransactionValue = 2000.0m; TotalQuantity = 1.0m; FilledQuantity = 0.0m }
-// ]
-
-// let input = { Orders = orders; UserEmail = "user@gmail.com" }
-// let parameters = { maximalTransactionValue = 10000.0m }
-
-// workflowProcessOrders input parameters
-
-let storeCompletedTransactionInDatabase (order: Order) =
-    let document = BsonDocument([
-        ("Type", BsonString("Complete"))
-        ("TotalQuantity", BsonDouble(order.TotalQuantity))
-        ("FilledQuantity", BsonDouble(order.FilledQuantity))
-        ("TransactionValue", BsonDouble(order.TransactionValue))
-    ])
-    insertDocument document |> ignore
-
-let storeCompletedAndAdditionalOrdersInDatabase (originalOrder: Order) (additionalOrder: Order) =
-    let documents = [
-        BsonDocument([
-            ("Type", BsonString("Original"))
-            ("TotalQuantity", BsonDouble(originalOrder.TotalQuantity))
-            ("FilledQuantity", BsonDouble(originalOrder.FilledQuantity))
-            ("TransactionValue", BsonDouble(originalOrder.TransactionValue))
-        ])
-        BsonDocument([
-            ("Type", BsonString("Additional"))
-            ("TotalQuantity", BsonDouble(additionalOrder.TotalQuantity))
-            ("FilledQuantity", BsonDouble(additionalOrder.FilledQuantity))
-            ("TransactionValue", BsonDouble(additionalOrder.TransactionValue))
-        ])
-    ]
-    insertManyDocuments documents |> ignore
-
-let storeTransactionAttemptInDatabase (order: Order) =
-    let document = BsonDocument([
-        ("Type", BsonString("Attempt"))
-        ("TotalQuantity", BsonDouble(order.TotalQuantity))
-        ("FilledQuantity", BsonDouble(order.FilledQuantity))
-        ("TransactionValue", BsonDouble(order.TransactionValue))
-    ])
-    insertDocument document |> ignore
+// let invokeProcessing = { Orders = [{ Currency = "BTC"; Price = 10000.0; OrderType = "Buy"; Quantity = 1.0; Exchange = "Bitfinex"; TransactionValue = 10000m }]; UserEmail = "user@example.com" }
+// let tradingParams = { maximalTransactionValue = 50000m }
+// workflowProcessOrders invokeProcessing tradingParams
