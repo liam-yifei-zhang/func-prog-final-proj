@@ -66,3 +66,47 @@ Note that the file we provide may have dependencies from the core folder, those 
 -   **Configure Alert Threshold**:
 
     -   `/src/services/alertThresholdConfig.fs`
+
+## Side Effects -- along with the error handling
+
+-   **1.1 Accept user input**:
+
+    -   `/src/services/userSettings.fs`
+    -   `/src/services/pnlrouter.fs`
+    -   `/src/services/strategyRouter.fs`
+
+-   **1.2 Retrieval of cross-traded currency pairs**:
+
+    -   `/src/infra/BitStampApi.fs`
+    -   `/src/infra/BitfinexApi.fs`
+    -   `/src/infra/KrakenApi.fs`    
+    -   `/src/services/cryptoData.fs`
+
+-   **1.3 Historical arbitrage opportunities calculation**:
+
+    -   `/src/services/identifyHistoricalArbitrage.fs`
+
+-   **1.4 Real-time market data retrieval**:
+
+    -   `/src/infra/realTimeData.fs`
+    -   `/src/services/realTimeTrading.fs`
+
+-   **1.5 Order management**:
+
+    -   `/src/infra/BitStampApi.fs`
+    -   `/src/infra/BitfinexApi.fs`
+    -   `/src/infra/KrakenApi.fs`
+    -   `/src/services/processOrder.fs`
+
+-   **1.6 Data persistance**:
+
+    -   `/src/services/annualizedReturnCalc.fs`
+    -   `/src/services/cryptoData.fs`
+    -   `/src/services/historicalPnlCalc.fs`
+    -   `/src/services/processOrder.fs`
+
+-   **1.7 E-mail notifications**:
+
+    -   `/src/infra/email.fs`
+    -   `/src/services/processOrder.fs`
+    -   `/src/services/pnlCalc.fs`

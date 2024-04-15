@@ -1,36 +1,58 @@
 module UserSetting
 
-open Core.Domain
-open Infra.Db
+open System
+open FSharp.Control
 
-//in domain.fs
-(*
+type UserSettingsUpdate =
+    | UpdateMaximalTradingValue of float
+    | UpdateUserEmail of string
+    | GetUserSettings of AsyncReplyChannel<UserSettings>
+
 type UserSettings = {
     NumberOfCryptoCurrencies: int
     MinimalPriceSpread: float
     MinimalTransactionProfit: float
     MaximalTransactionValue: float
-    MaximalTradingValue: float // Updated to reflect actual usage
+    MaximalTradingValue: float
     UserEmail: string
 }
-*)
 
-//assume there is a user record in the database
-let User = {
-    NumberOfCryptoCurrencies = 0
-    MinimalPriceSpread = 0.0f
-    MinimalTransactionProfit = 0.0f
-    MaximalTransactionValue = 0.0f
-    MaximalTradingValue = 0.0f
-    UserEmail = ""
+let initialSettings = {
+    NumberOfCryptoCurrencies = 10
+    MinimalPriceSpread = 0.1f
+    MinimalTransactionProfit = 100.0f
+    MaximalTransactionValue = 10000.0f
+    MaximalTradingValue = 50000.0f
+    UserEmail = "user@example.com"
 }
 
-//call database to update user settings
-let updateDatabase (User: UserSettings) =
-    async {
-        do! Db.updateUserSettings User
-        return ()
+let userSettingsAgent = MailboxProcessor.Start(fun inbox ->
+    let rec messageLoop (currentState: UserSettings) = async {
+        let! message = inbox.Receive()
+        match message with
+        | UpdateMaximalTradingValue maxValue ->
+            let newState = { currentState with MaximalTradingValue = maxValue }
+            return! messageLoop newState
+        | UpdateUserEmail email ->
+            let newState = { currentState with UserEmail = email }
+            return! messageLoop newState
+        | GetUserSettings replyChannel ->
+            replyChannel.Reply(currentState)
+            return! messageLoop currentState
     }
+    messageLoop initialSettings
+)
+
+let updateUserSharedStates (newSettings: UserSettings) =
+    userSettingsAgent.Post(UpdateMaximalTradingValue newSettings.MaximalTradingValue)
+    userSettingsAgent.Post(UpdateUserEmail newSettings.UserEmail)
+
+    // Optionally wait for some operation to complete if needed
+    // Here, for example, we might want to fetch and print the updated settings
+    let updatedSettings = userSettingsAgent.PostAndReply(fun reply -> GetUserSettings reply)
+    printfn "Updated Settings: %A" updatedSettings
+
+
 
 //update maximal trading value
 let updateMaximalTradingValue (User: UserSettings) MaximalTradingValue = 
