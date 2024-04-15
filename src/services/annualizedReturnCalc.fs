@@ -1,5 +1,20 @@
+module MongoDBUtil =
+
+    open MongoDB.Driver
+    open MongoDB.Bson
+    open System
+
+    let connectionString = "your_actual_connection_string_here"  // Update this with the actual MongoDB Atlas connection string
+    let databaseName = "cryptoDatabase"
+    let collectionName = "transactions"
+
+    let client = MongoClient(connectionString)
+    let database = client.GetDatabase(databaseName)
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+
 module AnnualizedReturnCalculator =
     open System
+    open MongoDBUtil
     open Core.CalcAnnualizedReturn
 
     type CashFlow = {
@@ -18,25 +33,24 @@ module AnnualizedReturnCalculator =
         FinalValue: decimal
     }
 
-    type InvokeAnnualizedReturnCalculation = unit  // Placeholder for user invocation details
-
-    type DomainError = 
-        | InvalidInvestmentData
-        | InvalidDuration
-        | InvalidFinalValue
-
     let fetchInvestmentDataFromDb (): Async<InvestmentData> =
         async {
-            // let startDate = DateTime(2023, 1, 1)
-            // let endDate = DateTime(2023, 6, 30)
-            // let dayOneCashFlows = { Inflow = 1000m; Outflow = 200m }
-            // let finalValue = 1500m
-            return { Period = { StartDate = startDate; EndDate = endDate }; DayOneCashFlows = dayOneCashFlows; FinalValue = finalValue }
+            let filter = Builders<BsonDocument>.Filter.Gte("date", DateTime(2023, 1, 1)) &
+                         Builders<BsonDocument>.Filter.Lte("date", DateTime(2023, 12, 31))
+            let sort = Builders<BsonDocument>.Sort.Ascending("date")
+            let options = FindOptions<BsonDocument, BsonDocument>(Sort = sort)
+            let! docs = collection.Find(filter, options).ToListAsync() |> Async.AwaitTask
+
+            match docs with
+            | [] -> failwith "No investment data found for the specified period"
+            | _ ->
+                let startDate = docs.Head["date"].ToUniversalTime()
+                let endDate = docs.Last["date"].ToUniversalTime()
+                let dayOneCashFlows = { Inflow = docs.Head["inflow"].AsDecimal; Outflow = docs.Head["outflow"].AsDecimal }
+                let finalValue = docs.Last["finalValue"].AsDecimal
+
+                return { Period = { StartDate = startDate; EndDate = endDate }; DayOneCashFlows = dayOneCashFlows; FinalValue = finalValue }
         }
-
-
-    let emitAnnualizedReturnCalculatedEvent (annualizedReturn: decimal) =
-        printfn "Annualized Return Calculated: %A" annualizedReturn
 
     let calculateAnnualizedReturnWorkflow (invokeData: InvokeAnnualizedReturnCalculation) =
         async {
@@ -48,13 +62,8 @@ module AnnualizedReturnCalculator =
             match initialInvestment > 0m && durationYears > 0m && finalValue >= initialInvestment with
             | true ->
                 let annualizedReturn = calculateAnnualizedReturn initialInvestment finalValue durationYears
-                return emitAnnualizedReturnCalculatedEvent annualizedReturn
+                printfn "Annualized Return Calculated: %A" annualizedReturn
+                annualizedReturn |> Async.Return
             | false ->
-                let domainError = 
-                    match initialInvestment, durationYears, finalValue with
-                    | _, _, _ when initialInvestment <= 0m || finalValue < initialInvestment -> InvalidInvestmentData
-                    | _, duration, _ when duration <= 0m -> InvalidDuration
-                    | _, _, final when final < 0m -> InvalidFinalValue
-                    | _ -> InvalidInvestmentData
-                return domainError
+                failwith "Invalid investment data for annualized return calculation"
         }
