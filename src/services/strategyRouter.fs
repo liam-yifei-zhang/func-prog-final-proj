@@ -8,6 +8,7 @@ open Newtonsoft.Json
 
 open RealTimeTrading
 open IdentifyHistoricalArbitrageOpportunities
+open UserSetting
 
 type TradingParams = {
     Currencies: int
