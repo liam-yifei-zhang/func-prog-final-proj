@@ -68,6 +68,22 @@ let receiveData (wsClient: ClientWebSocket) : Async<unit> =
             return! receiveLoop ()
     }
     receiveLoop ()
+
+// Start the WebSocket client, connect, send authentication and subscription messages
+let start (uri: Uri, apiKey: string, subscriptionParameters: string) : Async<unit> =
+    async {
+        let! wsClient = connectToWebSocket uri
+        do! sendJsonMessage wsClient { action = "auth"; params = apiKey }
+        do! sendJsonMessage wsClient { action = "subscribe"; params = subscriptionParameters }
+        do! receiveData wsClient
+        return ()
+    }
+
+// Function to stop the WebSocket client
+let stop (wsClient: ClientWebSocket) : Async<unit> =
+    async {
+        do! wsClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Client requested stop", CancellationToken.None) |> Async.AwaitTask
+    }
     
 // Define a type for the message we want to send to the WebSocket
 type Message = { action: string; params: string }    

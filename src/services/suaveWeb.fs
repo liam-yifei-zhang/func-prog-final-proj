@@ -44,8 +44,8 @@ module TradingService =
         POST >=> path "/stratrgy" >=> changeTradingStrategy
 
     // Function to retrieve a list of traded currency pairs
-    let getTradedCurrencies : WebPart =
-        GET >=> path "/currencies" >=> tradedCurrencies
+    let getCrossTradedCurrencies : WebPart =
+        GET >=> path "/currencies" >=> corssCurrencies
     
     // Funtion to identify historical arbitrage opportunities
     let identifyArbitrageOpportunities : WebPart =
