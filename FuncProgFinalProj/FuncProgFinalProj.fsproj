@@ -9,7 +9,7 @@
   <ItemGroup>
     <Compile Include="Library.fs" />
     <Compile Include="../src/infra/MongoDBUtil.fs" />
-    <Compile Include="../Main.fs" />
+    <Compile Include="../src/infra/Main.fs" />
   </ItemGroup>
 
   <ItemGroup>
