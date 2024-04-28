@@ -1,8 +1,9 @@
 module KrakenAPI
 
+open System
 open System.Net.Http
 open System.Text
-open Newtonsoft.Json
+open System.Text.Json
 
 type SubmitDescription = {
     order: string
@@ -59,24 +60,29 @@ type KrakenOrderResponse = {
 
 let private httpClient = new HttpClient()
 
+let generateNonce () =
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+    let random = Random().Next(1000, 9999)
+    timestamp * 10000L + int64 random
+
 let parseKrakenSubmitResponse (jsonString: string) : Result<string[], string> =
     try
-        let parsedResponse = JsonConvert.DeserializeObject<KrakenSubmitResponse>(jsonString)
+        let parsedResponse = JsonSerializer.Deserialize<KrakenSubmitResponse>(jsonString)
         match parsedResponse.error with
-        | error when error.Length > 0 -> Result.Error (String.Join("; ", error))
+        | error when error.Length > 0 -> Result.Error (String.concat "; " error)
         | _ -> Result.Ok parsedResponse.result.txid
     with
-    | ex: Newtonsoft.Json.JsonException -> 
+    | ex -> 
         Result.Error (sprintf "JSON parsing error: %s" ex.Message)
 
 let parseKrakenOrderResponse (jsonString: string) : Result<Map<string, OrderInfo>, string> =
     try
-        let parsedResponse = JsonConvert.DeserializeObject<KrakenOrderResponse>(jsonString)
+        let parsedResponse = JsonSerializer.Deserialize<KrakenOrderResponse>(jsonString)
         match parsedResponse.Error with
-        | error when error.Length > 0 -> Result.Error (String.Join("; ", error))
+        | error when error.Length > 0 -> Result.Error (String.concat "; " error)
         | _ -> Result.Ok parsedResponse.Result
     with
-    | ex: Newtonsoft.Json.JsonException -> 
+    | ex -> 
         Result.Error (sprintf "JSON parsing error: %s" ex.Message)
 
 let submitOrder (pair: string) (orderType: string) (volume: string) (price: string) (orderTypeSpecific: string) =
@@ -123,9 +129,9 @@ let fetchKrakenPairs = async {
         let! response = httpClient.GetAsync(url) |> Async.AwaitTask
         if response.IsSuccessStatusCode then
             let! jsonResponse = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            let parsedJson = JsonConvert.DeserializeObject<JObject>(jsonResponse)
-            let pairs = parsedJson.["result"]
-                        |> JObject.Properties
+            let parsedJson = JsonDocument.Parse(jsonResponse)
+            let pairs = parsedJson.RootElement.GetProperty("result")
+                        |> fun result -> result.EnumerateObject()
                         |> Seq.map (fun p -> p.Name)
                         |> Seq.toList
             return Result.Ok pairs

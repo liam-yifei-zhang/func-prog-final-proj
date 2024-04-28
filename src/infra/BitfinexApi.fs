@@ -2,9 +2,10 @@ module BitfinexAPI
 
 open System.Net.Http
 open System.Text
-open Newtonsoft.Json
+open System.Text.Json
 open System.Threading.Tasks
 open FSharp.Data
+
 let private httpClient = new HttpClient()
 
 type BitfinexSubmitOrderResponse = {
@@ -29,23 +30,22 @@ type BitfinexOrderTradesResponse = {
 }
 
 let parseSubmitOrderResponse (jsonString: string) : Result<int64, string> =
-    try
-        let response = JsonConvert.DeserializeObject<BitfinexSubmitOrderResponse>(jsonString)
+    match JsonSerializer.Deserialize<BitfinexSubmitOrderResponse>(jsonString) with
+    | response ->
         match response.Data with
-        | [|(orderId, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _)|] ->
+        | [| (orderId, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) |] ->
             Result.Ok orderId
         | _ -> 
             Result.Error "Invalid response format or multiple orders found."
-    with
-    | :? Newtonsoft.Json.JsonException as ex -> 
-        Result.Error (sprintf "JSON parsing error: %s" ex.Message)
+    | _ ->
+        Result.Error "JSON parsing error"
 
 let parseOrderTradesResponse (jsonString: string) : Result<BitfinexOrderTradesResponse list, string> =
     try
-        let trades = JsonConvert.DeserializeObject<BitfinexOrderTradesResponse[]>(jsonString)
-        Result.Ok (trades |> Array.toList)
+        let trades = JsonSerializer.Deserialize<BitfinexOrderTradesResponse[]>(jsonString)
+        Result.Ok (Array.toList trades)
     with
-    | :? Newtonsoft.Json.JsonException as ex -> 
+    | ex ->
         Result.Error (sprintf "JSON parsing error: %s" ex.Message)
 
 let submitOrder (orderType: string) (symbol: string) (amount: string) (price: string) =
@@ -56,10 +56,12 @@ let submitOrder (orderType: string) (symbol: string) (amount: string) (price: st
         let! response = httpClient.PostAsync(url, content) |> Async.AwaitTask
         match response.IsSuccessStatusCode with
         | true ->
-            let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            return Some (parseSubmitOrderResponse responseString)
+            let! responseJson = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            match parseSubmitOrderResponse responseJson with
+            | Ok result -> return Some (Ok result)  // Assuming result is int64
+            | Error errorMsg -> return Some (Error errorMsg)
         | false ->
-            return None
+            return Some (Error "Failed to submit order")
     }
     
 let retrieveOrderTrades (symbol: string) (orderId: int) =
@@ -69,20 +71,16 @@ let retrieveOrderTrades (symbol: string) (orderId: int) =
         let! response = httpClient.PostAsync(url, requestContent) |> Async.AwaitTask
         match response.IsSuccessStatusCode with
         | true ->
-            let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            return Some (parseOrderTradesResponse responseString)
+            let! responseJson = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return Some (parseOrderTradesResponse responseJson)
         | false ->
             return None
     }
 
-let fetchBitfinexPairs = async {
+let fetchBitfinexPairs : Async<Result<string list, string>> = async {
     let url = "https://api-pub.bitfinex.com/v2/conf/pub:list:pair:exchange"
-    try
-        let! response = httpClient.GetStringAsync(url) |> Async.AwaitTask
-        let data = JArray.Parse(response).[0] |> JArray
-        let pairs = data.Values<string>() |> Seq.toList
-        return Result.Ok pairs
-    with
-    | ex -> 
-        return Result.Error (sprintf "Failed to fetch Bitfinex pairs: %s" ex.Message)
+    let! response = httpClient.GetStringAsync(url) |> Async.AwaitTask
+    let jsonDocument = JsonDocument.Parse(response)
+    let data = jsonDocument.RootElement.EnumerateArray() |> Seq.map (fun v -> v.GetString()) |> Seq.toList
+    return Result.Ok data
 }

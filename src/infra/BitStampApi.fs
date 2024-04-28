@@ -3,7 +3,8 @@ module BitstampAPI
 open System
 open System.Net.Http
 open System.Text
-open Newtonsoft.Json
+open System.Text.Json
+open System.Collections.Generic
 
 type Transaction = {
     Tid: int64
@@ -28,43 +29,32 @@ let private httpClient = new HttpClient()
 
 let parseResponseOrderStatus (jsonString: string) : Result<BitstampOrderResponse, string> =
     try
-        match JsonConvert.DeserializeObject<BitstampOrderResponse>(jsonString) with
-        | parsedResponse -> Result.Ok parsedResponse
-        | exception ex -> Result.Error (sprintf "JSON parsing error: %s" ex.Message)
+        let parsedResponse = JsonSerializer.Deserialize<BitstampOrderResponse>(jsonString)
+        Result.Ok parsedResponse
     with
-    | ex: Newtonsoft.Json.JsonException -> 
+    | ex ->
         Result.Error (sprintf "JSON parsing error: %s" ex.Message)
 
 let postRequest (url: string) (data: (string * string) list) =
     async {
-        let content = new FormUrlEncodedContent(data |> Seq.map (fun (k, v) -> new System.Collections.Generic.KeyValuePair<string, string>(k, v)))
-        let! response = Async.AwaitTask (httpClient.PostAsync(url, content))
+        let content = new FormUrlEncodedContent(data |> Seq.map (fun (k, v) -> KeyValuePair(k, v)))
+        let! response = httpClient.PostAsync(url, content) |> Async.AwaitTask
         match response.IsSuccessStatusCode with
-        | true -> 
-            let! responseString = Async.AwaitTask (response.Content.ReadAsStringAsync())
-            Debug.WriteLine($"Response JSON: {responseString}")
-            Some responseString |> Result.Ok
-        | _ -> 
-            Debug.WriteLine($"Error: {response.StatusCode}")
-            None |> Result.Error "Failed to execute post request."
+        | true ->
+            let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return Result.Ok (Some responseString)
+        | _ ->
+            return Result.Error "Failed to execute post request."
     }
 
 let buyMarketOrder (marketSymbol: string) (amount: string) (clientOrderId: Option<string>) =
     let url = sprintf "https://www.bitstamp.net/api/v2/buy/market/%s/" (marketSymbol.ToLower())
-    let data = 
-        [ "amount", amount ] @ 
-        (match clientOrderId with 
-         | Some id -> [ "client_order_id", id ] 
-         | _ -> [])
+    let data = [ "amount", amount ] @ (match clientOrderId with | Some id -> [ "client_order_id", id ] | _ -> [])
     postRequest url data
 
 let sellMarketOrder (marketSymbol: string) (amount: string) (clientOrderId: Option<string>) =
     let url = sprintf "https://www.bitstamp.net/api/v2/sell/market/%s/" (marketSymbol.ToLower())
-    let data = 
-        [ "amount", amount ] @ 
-        (match clientOrderId with 
-         | Some id -> [ "client_order_id", id ] 
-         | _ -> [])
+    let data = [ "amount", amount ] @ (match clientOrderId with | Some id -> [ "client_order_id", id ] | _ -> [])
     postRequest url data
 
 let orderStatus (orderId: string) =
@@ -78,8 +68,8 @@ let fetchBitstampPairs = async {
         let! response = httpClient.GetAsync(url) |> Async.AwaitTask
         if response.IsSuccessStatusCode then
             let! jsonResponse = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            let pairs = JsonConvert.DeserializeObject<_[]>(jsonResponse)
-            let symbolList = pairs |> Array.map (fun x -> x.["url_symbol"].ToString())
+            let pairs = JsonSerializer.Deserialize<JsonElement[]>(jsonResponse)
+            let symbolList = pairs |> Array.map (fun x -> x.GetProperty("url_symbol").GetString())
             return Result.Ok symbolList
         else
             return Result.Error "Failed to fetch Bitstamp pairs due to HTTP error."
@@ -87,4 +77,3 @@ let fetchBitstampPairs = async {
     | ex ->
         return Result.Error (sprintf "Failed to fetch Bitstamp pairs: %s" ex.Message)
 }
-
