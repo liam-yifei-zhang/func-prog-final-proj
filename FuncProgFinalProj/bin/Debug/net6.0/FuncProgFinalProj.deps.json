@@ -8,7 +8,7 @@
     ".NETCoreApp,Version=v6.0": {
       "FuncProgFinalProj/1.0.0": {
         "dependencies": {
-          "FSharp.Core": "6.0.7",
+          "FSharp.Core": "8.0.101",
           "MongoDB.Driver": "2.25.0"
         },
         "runtime": {
@@ -45,11 +45,11 @@
           }
         }
       },
-      "FSharp.Core/6.0.7": {
+      "FSharp.Core/8.0.101": {
         "runtime": {
           "lib/netstandard2.1/FSharp.Core.dll": {
-            "assemblyVersion": "6.0.0.0",
-            "fileVersion": "6.0.722.51308"
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.1.123.56302"
           }
         },
         "resources": {
@@ -242,12 +242,12 @@
       "path": "dnsclient/1.6.1",
       "hashPath": "dnsclient.1.6.1.nupkg.sha512"
     },
-    "FSharp.Core/6.0.7": {
+    "FSharp.Core/8.0.101": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-e6wGrq5smV3Yk2fBE/Y0nBG5oFyF59k5Je0a0QDydUpg6liyaafGjD3xvutciKepCP2knspZ/sWViC/F1OyyQQ==",
-      "path": "fsharp.core/6.0.7",
-      "hashPath": "fsharp.core.6.0.7.nupkg.sha512"
+      "sha512": "sha512-sOLz3O4BOxnTKfd5OChdRmDUy4Id0GfoEClRG4nzIod8LY1LJZcNyygKAV0A78XOLh8yvhA5hsDYKZXGCR9blw==",
+      "path": "fsharp.core/8.0.101",
+      "hashPath": "fsharp.core.8.0.101.nupkg.sha512"
     },
     "Microsoft.Extensions.Logging.Abstractions/2.0.0": {
       "type": "package",

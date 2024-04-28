@@ -41,3 +41,47 @@
 /Users/simonsun/Desktop/Desktop - hhh’s MacBook Air/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/runtimes/win/native/mongocrypt.dll
 /Users/simonsun/Desktop/Desktop - hhh’s MacBook Air/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.fsproj.CopyComplete
 /Users/simonsun/Desktop/Desktop - hhh’s MacBook Air/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.genruntimeconfig.cache
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.AssemblyInfoInputs.cache
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.AssemblyInfo.fs
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.xml
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.pdb
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/FuncProgFinalProj
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/FuncProgFinalProj.deps.json
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/FuncProgFinalProj.runtimeconfig.json
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/FuncProgFinalProj.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/FuncProgFinalProj.pdb
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/FuncProgFinalProj.xml
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/AWSSDK.Core.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/AWSSDK.SecurityToken.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/DnsClient.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/FSharp.Core.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/Microsoft.Extensions.Logging.Abstractions.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/MongoDB.Bson.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/MongoDB.Driver.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/MongoDB.Driver.Core.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/MongoDB.Libmongocrypt.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/SharpCompress.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/Snappier.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/ZstdSharp.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/cs/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/de/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/es/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/fr/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/it/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/ja/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/ko/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/pl/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/pt-BR/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/ru/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/tr/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/zh-Hans/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/zh-Hant/FSharp.Core.resources.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/runtimes/linux/native/libmongocrypt.so
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/runtimes/osx/native/libmongocrypt.dylib
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/runtimes/win/native/mongocrypt.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.fsproj.AssemblyReference.cache
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.fsproj.CoreCompileInputs.cache
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.sourcelink.json
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.fsproj.CopyComplete
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.genruntimeconfig.cache
