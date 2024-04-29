@@ -50,9 +50,7 @@ let tradingStrategyRoute =
         ])
         printfn "%A" document
         let result = MongoDBUtil.insertDocument "TradingStrategies" document
-        match result with
-            | null -> BAD_REQUEST "Failed to insert document"
-            | _ -> OK "Document inserted successfully"
+        OK (result.ToString())
 
     )
 
