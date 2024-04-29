@@ -5,6 +5,7 @@ open MongoDB.Bson
 open System
 open System.Collections.Generic
 
+
 let connectionString = "mongodb+srv://shenganw:6KUC4TDE9PAKQGvL@cluster0.pjwcuvc.mongodb.net/"
 let databaseName = "cryptoDatabase"
 
@@ -38,6 +39,16 @@ let printAllDocuments (collectionName: string) =
     for doc in documents do
         printfn "%A" doc
 
+
+let createUniqueIndex (collectionName: string) (indexField: string) =
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+    let keys = Builders<BsonDocument>.IndexKeys.Ascending(indexField)
+    let options = CreateIndexOptions()
+    options.Unique <- true
+    let indexModel = new CreateIndexModel<BsonDocument>(keys, options)
+    collection.Indexes.CreateOne(indexModel)
+
+
 let upsertDocumentById (collectionName: string) (id: string) (document: BsonDocument) =
     let collection = database.GetCollection<BsonDocument>(collectionName)
     let objectId = ObjectId.Parse(id)  // Parse the string ID to ObjectId
@@ -45,3 +56,4 @@ let upsertDocumentById (collectionName: string) (id: string) (document: BsonDocu
     let options = new UpdateOptions()
     options.IsUpsert <- true
     collection.ReplaceOne(filter, document, options) |> ignore
+

@@ -2,8 +2,9 @@ module RealTimeTrading
 open System.Text.Json
 open System
 open MongoDBUtil
-
 open System.Collections.Concurrent
+open MongoDB.Driver
+open MongoDB.Bson
 
 type PriceQuote = {
     Event: string
@@ -32,83 +33,85 @@ let tradingConfig = {
 }
 
 let mutable tradingValue = 0M
-let priceStore = ConcurrentDictionary<string, (decimal * decimal)>()
-
-let processQuote (quote: PriceQuote) =
-    let currencyPairCollectionName = "currencyPairs"
-    let documents = fetchAllDocuments(currencyPairCollectionName)
-    for doc in documents do
-        printfn "%A" doc
-
-    let updatePrices (bidAsk: (decimal * decimal) option) =
-        match bidAsk with
-        | Some (bid, ask) ->
-            if quote.Conditions[0] = 1 then // Bid
-                let newBid = min bid quote.Price
-                priceStore.AddOrUpdate(quote.Pair, (newBid, ask), fun _ _ -> (newBid, ask)) |> ignore
-            elif quote.Conditions[0] = 2 then // Ask
-                let newAsk = max ask quote.Price
-                priceStore.AddOrUpdate(quote.Pair, (bid, newAsk), fun _ _ -> (bid, newAsk)) |> ignore
-        | None ->
-            if quote.Conditions[0] = 1 then
-                priceStore.AddOrUpdate(quote.Pair, (quote.Price, Decimal.Zero), fun _ _ -> (quote.Price, Decimal.Zero)) |> ignore
-            elif quote.Conditions[0] = 2 then
-                priceStore.AddOrUpdate(quote.Pair, (Decimal.MaxValue, quote.Price), fun _ _ -> (Decimal.Zero, quote.Price)) |> ignore
-
-    let (exists, currentPrices) = priceStore.TryGetValue(quote.Pair)
-    updatePrices (if exists then Some currentPrices else None)
-
-    printfn "containsKey: %b" (priceStore.ContainsKey(quote.Pair))
-    if priceStore.ContainsKey(quote.Pair) then
-        let (bid, ask) = priceStore.[quote.Pair]
-        
-        printfn "bid: %M. ask: %M" bid ask
-        // Check if both bid and ask prices are available
-        if bid <> Decimal.MaxValue && ask <> Decimal.Zero then
-            let spread = ask - bid
-            printfn "spread: %M. MinSpread: %M" spread tradingConfig.MinSpread
-            if spread >= tradingConfig.MinSpread then
-                let transactionAmount = min tradingConfig.MaxTransactionAmount (tradingConfig.MaxTradingValue - tradingValue)
-                let possibleProfit = (spread - tradingConfig.MinSpread) * transactionAmount
-                printfn "possibleProfit: %M. MinProfit: %M" possibleProfit tradingConfig.MinProfit
-                if possibleProfit >= tradingConfig.MinProfit then
-                    tradingValue <- tradingValue + transactionAmount
-                    printfn "Arbitrage Opportunity: %A. Possible profit: %M on pair %s" quote.Timestamp possibleProfit quote.Pair
-                    
-                    let bidQuote = {
-                        Event = quote.Event
-                        Pair = quote.Pair
-                        Price = bid
-                        Timestamp = quote.Timestamp
-                        Size = quote.Size
-                        Conditions = quote.Conditions
-                        Id = quote.Id
-                        ExchangeType = 1
-                        ResponseTime = quote.ResponseTime
-                    }
-                    
-                    let askQuote = {
-                        Event = quote.Event
-                        Pair = quote.Pair
-                        Price = ask
-                        Timestamp = quote.Timestamp
-                        Size = quote.Size
-                        Conditions = quote.Conditions
-                        Id = quote.Id
-                        ExchangeType = 2
-                        ResponseTime = quote.ResponseTime
-                    }
-
-                    printfn "bidQuote: %s. askQuote: %s" bidQuote.Pair askQuote.Pair
-                    Some (bidQuote, askQuote)
-                else
-                    None
-            else
-                None
-        else
-            None
+let priceStore = ConcurrentDictionary<string, ConcurrentDictionary<string, PriceQuote>>()
+let fetchTradingConfig : TradingConfig option =
+    let collection = database.GetCollection<BsonDocument>("TradingStrategies")
+    let filter = Builders<BsonDocument>.Filter.Empty
+    let document = collection.Find(filter).FirstOrDefault()
+    if document <> null then
+        // Assuming values are stored as floating-point numbers, not as BsonDecimal128
+        let minSpread = document.["MinimalPriceSpread"].AsDouble |> decimal
+        let minProfit = document.["MinimalTransactionProfit"].AsDouble |> decimal
+        let maxTransactionValue = document.["MaximalTransactionValue"].AsDouble |> decimal
+        let maxTradingValue = document.["MaximalTradingValue"].AsDouble |> decimal
+        Some { 
+            MinSpread = minSpread; 
+            MinProfit = minProfit; 
+            MaxTransactionAmount = maxTransactionValue; 
+            MaxTradingValue = maxTradingValue 
+        }
     else
         None
+
+
+
+let updatePriceStore (exchange: string) (pair: string) (quote: PriceQuote) =
+    let exchangePrices = priceStore.GetOrAdd(exchange, fun _ -> ConcurrentDictionary<string, PriceQuote>())
+    exchangePrices.AddOrUpdate(pair, quote, fun _ _ -> quote) |> ignore
+
+let isProfitable (bidPrice: PriceQuote) (askPrice: PriceQuote) =
+    match fetchTradingConfig with
+    | Some config ->
+        printfn "Configuration loaded: %A" config
+        // Now you can use 'config' wherever needed in your application
+        let spread = bidPrice.Price - askPrice.Price
+        let profit = (spread * (min bidPrice.Size askPrice.Size))
+        let transactionAmount = (bidPrice.Price * bidPrice.Size + askPrice.Price * askPrice.Size)
+        printfn "spread: %M. profit: %M. transactionAmount: %M. tradingValue: %M" spread profit transactionAmount tradingValue
+        let b1 = (spread > config.MinSpread)
+        let b2 = (profit > config.MinProfit)
+        let b3 = (transactionAmount < config.MaxTransactionAmount)
+        let b4 = ((transactionAmount + tradingValue) < config.MaxTradingValue)
+        printfn "b1: %b. b2: %b. b3: %b. b4: %b." b1 b2 b3 b4
+        b1 && b2 && b3 && b4
+    | None ->
+        false 
+
+
+let executeArbitrageTrade (exchange1: string) (exchange2: string) (pair: string) (bidQuote: PriceQuote) (askQuote: PriceQuote) =
+    let transactionAmount = (bidQuote.Price * bidQuote.Size + askQuote.Price * askQuote.Size)
+    let profit = (bidQuote.Price - askQuote.Price) * (min bidQuote.Size askQuote.Size)
+    tradingValue <- tradingValue + transactionAmount
+    printfn "Arbitrage Opportunity: %A. Profit: %M on pair %s" bidQuote.Timestamp profit pair
+    printfn "bidQuote: %A. askQuote: %A" bidQuote.Timestamp bidQuote.Timestamp
+    // Some (bidQuote, askQuote)
+    // Execute buy and sell orders simultaneously...
+
+let checkForArbitrage (pair: string) =
+    let exchanges = priceStore.Keys |> Seq.toList
+    for exchange1 in exchanges do
+        for exchange2 in exchanges do
+            if exchange1 <> exchange2 then
+                let bidPrice = priceStore.[exchange1].TryGetValue(pair)
+                let askPrice = priceStore.[exchange2].TryGetValue(pair)
+                match bidPrice, askPrice with
+                | (true, bidQuote), (true, askQuote) ->
+                    let isProfitableBool = isProfitable bidQuote askQuote
+                    printfn "isProfitable: %b. bid: %i. ask: %i. bid_bool: %b. ask_bool: %b." isProfitableBool bidQuote.Conditions[0] askQuote.Conditions[0] (bidQuote.Conditions[0] = 1) (askQuote.Conditions[0]=2)
+                    if bidQuote.Conditions[0] = 1 && askQuote.Conditions[0] = 2 && isProfitableBool then
+                        printf "here"
+                        executeArbitrageTrade exchange1 exchange2 pair bidQuote askQuote
+                 
+                        
+                | _ -> ()
+
+
+let processQuote (quote: PriceQuote) =
+    let exchange = quote.ExchangeType.ToString()
+    updatePriceStore exchange quote.Pair quote
+    checkForArbitrage quote.Pair
+
+
 
 let parseQuoteFromMessage (message: string) =
     try
