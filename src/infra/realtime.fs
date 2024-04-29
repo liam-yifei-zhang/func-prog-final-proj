@@ -17,6 +17,10 @@ open RealTimeTrading
 //Improve encapsulation in the code
 
 //Define a function to connect to the WebSocket
+
+let mutable cts = new CancellationTokenSource()
+let mutable wsClient = new ClientWebSocket()
+
 let connectToWebSocket (uri: Uri) =
         async {
         let wsClient = new ClientWebSocket()
@@ -28,25 +32,23 @@ let connectToWebSocket (uri: Uri) =
         }
         
 // Define a function to receive data from the WebSocket
-let receiveData (wsClient: ClientWebSocket) : Async<unit> =
+let receiveData (wsClient: ClientWebSocket) (cancellationToken: CancellationToken): Async<unit> =
     let buffer = Array.zeroCreate 10024
 
-    let rec receiveLoop () = async{
+    let rec receiveLoop () = async {
         let segment = new ArraySegment<byte>(buffer)
 
+        // Here we directly pass `cancellationToken` without additional lambda wrapping
         let! result =
-            wsClient.ReceiveAsync(segment, CancellationToken.None)
-            //Convert a .NET task into an async workflow
-            //Asynchronously await the completion of an asynchronous computation (non-blocking)
+            wsClient.ReceiveAsync(segment, cancellationToken)
             |> Async.AwaitTask
 
         match result.MessageType with
         | WebSocketMessageType.Text ->
             let message = Encoding.UTF8.GetString(buffer, 0, result.Count)
             printfn "%s" message
-            // TODO: Process the message
-            // You should define Polygon message types and message processing logic
-            // You should also utilize Result types for error handling
+            // Assuming parseQuoteFromMessage and processQuote are defined elsewhere correctly
+            // with their return types sufficiently annotated to avoid type inference issues.
             let quoteResult = parseQuoteFromMessage message
             match quoteResult with
             | Ok quote ->
@@ -71,17 +73,36 @@ let sendJsonMessage (wsClient: ClientWebSocket) message =
 // Sample subscripton parameters: "XT.BTC-USD"
 // See https://polygon.io/docs/crypto/ws_getting-started
 let start(uri: Uri, apiKey: string, subscriptionParameters: string) =
-            async {
-            //Establish websockets connectivity
-            //Run underlying async workflow and await the result
-            let! wsClient = connectToWebSocket uri
-            //Authenticate with Polygon
-            sendJsonMessage wsClient { action = "auth"; params = apiKey }
-            //Subscribe to market data
-            sendJsonMessage wsClient { action = "subscribe" ; params = subscriptionParameters }
-            //Process market data
-            do! receiveData wsClient
-            }
+        async {
+            wsClient <- new ClientWebSocket()
+            cts <- new CancellationTokenSource()
+            try
+                //Establish websockets connectivity
+                //Run underlying async workflow and await the result
+                let! wsClient = connectToWebSocket uri
+                //Authenticate with Polygon
+                sendJsonMessage wsClient { action = "auth"; params = apiKey }
+                //Subscribe to market data
+                sendJsonMessage wsClient { action = "subscribe" ; params = subscriptionParameters }
+                //Process market data
+                do! receiveData wsClient cts.Token
+            with
+            | :? System.Threading.Tasks.TaskCanceledException ->
+                printfn "Operation was canceled successfully."
+            | ex ->
+                printfn "Unexpected exception: %s" ex.Message
+        }
+
+let stop() =
+    cts.Cancel()
+    if wsClient.State = WebSocketState.Open then
+        wsClient.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed by the application", CancellationToken.None) 
+        |> Async.AwaitTask 
+        |> Async.RunSynchronously
+        printfn "WebSocket closed successfully."
+    else
+        printfn "WebSocket was not open."
+    printfn "Real-time trading stopped."
          
 
 // [<EntryPoint>]
