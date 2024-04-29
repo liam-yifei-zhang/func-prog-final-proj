@@ -1,5 +1,81 @@
-namespace Services
+module CryptoData
 
+open System
+open System.Net.Http
+open System.Threading.Tasks
+open System.Text.Json
+
+let client = HttpClient()
+
+type TradingPair = {
+    Altname: string
+    WSname: string
+}
+
+let bitfinexUrl = "https://api-pub.bitfinex.com/v2/conf/pub:list:pair:exchange"
+let getTradingPairsForbitfinex (apiUrl : string) =
+    async {
+        let! response = client.GetAsync(apiUrl :> string) |> Async.AwaitTask
+        let! json = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+        let pairsArray = JsonSerializer.Deserialize<string[][]>(json)
+        let filteredPairs =
+            pairsArray
+            |> Array.collect id // Flatten
+            |> Array.filter (fun pair -> pair.EndsWith("USD") && pair.Length = 6) // Filter pairs
+            |> Array.map (fun pair -> pair.Insert(3, "-")) // Format to "XXX-USD"
+        return filteredPairs
+    }
+let bitstampUrl = "https://www.bitstamp.net/api/v2/ticker/"
+let getTradingPairsForBitstamp (apiUrl : string) =
+    async {
+        let! response = client.GetAsync(apiUrl :> string) |> Async.AwaitTask
+        let! json = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+        let data = JsonSerializer.Deserialize<JsonElement[]>(json)
+        let filteredPairs =
+            data
+            |> Array.filter (fun pair ->
+                let pairString = pair.GetProperty("pair").GetString()
+                pairString.EndsWith("USD") && pairString.Length = 7)
+            |> Array.map (fun pair ->
+                let pairString = pair.GetProperty("pair").GetString()
+                let currencyPair = sprintf "%s-%s" (pairString.Substring(0, 3)) "USD"
+                currencyPair)
+        return filteredPairs
+    }
+let krakenUrl = "https://api.kraken.com/0/public/AssetPairs"
+let getTradingPairsForKraken (apiUrl : string) =
+    async {
+        let! response = client.GetAsync(apiUrl :> string) |> Async.AwaitTask
+        let! json = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+        let pairsJson = JsonSerializer.Deserialize<JsonElement>(json).GetProperty("result")
+        let pairs =
+            [ for pair in pairsJson.EnumerateObject() do
+                let wsname = pair.Value.GetProperty("wsname").GetString()
+                if wsname <> null then
+                    if wsname.EndsWith("USD") && wsname.Length = 7 then
+                        let prefix = wsname.Substring(0, 3)
+                        yield sprintf "%s-USD" prefix ]
+        return pairs |> Array.ofList
+    }
+
+let findCommonPairs (pairs1 : string[]) (pairs2 : string[]) (pairs3 : string[]) =
+    let set1 = Set.ofArray pairs1
+    let set2 = Set.ofArray pairs2
+    let set3 = Set.ofArray pairs3
+    let commonPairs = Set.intersect set1 (Set.intersect set2 set3)
+    commonPairs |> Set.toArray
+
+let fetchCrossPairs =
+    async {
+        let! bitfinexPairs = getTradingPairsForbitfinex bitfinexUrl
+        let! bitstampPairs = getTradingPairsForBitstamp bitstampUrl
+        let! krakenPairs = getTradingPairsForKraken krakenUrl
+
+        let commonPairs = findCommonPairs bitfinexPairs bitstampPairs krakenPairs
+        return commonPairs
+    }
+
+(*
 open Core.Domain
 open Infra.Repositories
 open System
@@ -109,3 +185,4 @@ let commonPairs = findCommonPairs pairs
 storePairsInMongo commonPairs
 fetchAllPairs
 storePairsInMongo findCommonPairsByHash
+*)

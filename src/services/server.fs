@@ -11,6 +11,8 @@ open MongoDB.Bson
 open MongoDB.Driver
 open MongoDBUtil
 
+open CryptoData
+
 type TradingStrategy = {
     Currencys: int
     MinimalPriceSpread: float
@@ -54,12 +56,25 @@ let tradingStrategyRoute =
 
     )
 
+let getCrossCurrency =
+    path "/crosscurrency" >=> request (fun r ->
+        let crosscurrency = CryptoData.fetchCrossPairs |> Async.RunSynchronously
+        let document = BsonDocument([
+            BsonElement("CrossCurrency", BsonArray(crosscurrency))
+        ])
+        MongoDBUtil.upsertDocumentById "CrossCurrency" "662f6e881e03faaa0d5e4c42" document
+        OK (JsonConvert.SerializeObject(crosscurrency))
+    )
+
 
 let webApp =
     choose [
         path "/" >=> OK "Welcome to Arbitrage Gainer "
         POST >=> choose [
             path "/strategies" >=> tradingStrategyRoute]
+        GET >=> choose [
+            path "/crosscurrency" >=> getCrossCurrency
+        ]
         
     ]
 
