@@ -1,4 +1,4 @@
-module main
+module realtime
 open System
 open System.Net
 open System.Net.WebSockets
