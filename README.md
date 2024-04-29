@@ -110,3 +110,99 @@ Note that the file we provide may have dependencies from the core folder, those 
     -   `/src/infra/email.fs`
     -   `/src/services/processOrder.fs`
     -   `/src/services/pnlCalc.fs`
+
+### API Documentation
+
+#### POST Requests
+
+#### Speed Test
+
+<details>
+ <summary><code>POST</code> <code><b>/speedTest</b></code> <code>(start the speedTest)</code></summary>
+
+##### Parameters
+
+##### Responses
+
+> | http code | content-type                 | response                                      |
+> |-----------|------------------------------|-----------------------------------------------|
+> | `200`     | `text/plain;charset=UTF-8`   | `SpeedTest start successfully `                   |                         
+> | `500`     | `text/plain;charset=UTF-8`   | `Internal Server Error`                       |
+
+</details>
+
+---
+
+#### Start Trading
+
+<details>
+ <summary><code>POST</code> <code><b>/trade/start</b></code> <code>(Allows user to start real time trading)</code></summary>
+
+##### Parameters: e.g./trade/start
+
+</details>
+
+---
+
+#### All cross-traded currencies
+
+<details>
+ <summary><code>POST</code> <code><b>/trade/stop</b></code> <code>(Allows user to stop real-time trading)</code></summary>
+
+##### Parameters: e.g./trade/stop
+
+</details>
+
+---
+
+#### Post historical arbitrage opportunities
+
+<details>
+ <summary><code>POST</code> <code><b>/opportunities</b></code> <code>(Allows user to post historical arbitrage opportunities)</code></summary>
+
+##### Parameters: e.g./opportunities
+
+</details>
+
+---
+#### Post P&L results
+
+<details>
+ <summary><code>POST</code> <code><b>/pnl</b></code> <code>(Allows user to post P&L calculation results)</code></summary>
+
+##### Parameters: e.g./pnl
+
+</details>
+
+---
+
+
+#### GET Requests
+#### Post User Parameters
+
+<details>
+ <summary><code>POST</code> <code><b>/strategies/:Currencies/:MinimalPriceSpread/:MinimalTransactionProfit/:MaximalTransactionValue/:MaximalTradingValue/:Email</b></code> <code>(Allows user to post parameters)</code></summary>
+
+##### Parameters: e.g./strategies/5/0.05/5/2000/5000/beast@andrew.cmu.edu
+> | name      | type      | data type | description                 |
+> |-----------|-----------|-----------|-----------------------------|
+> | Currencies  | required  | int    | the number of cryptocurrencies to track    |
+> | MinimalPriceSpread  | required  | float | the minimal price spread    |
+> | MinimalTransactionProfit  | required  | float  | the minimal transaction profit   |
+> | MaximalTransactionValue  | required  | float  |  the maximal transaction value  |
+> | MaximalTradingValue  | required  | float  | the maximal trading value  |
+> | Email  | required  | float  | user's email  |
+
+</details>
+
+---
+#### All cross-traded currencies
+
+<details>
+ <summary><code>GET</code> <code><b>/crosscurrency</b></code> <code>(Allows user to fetch all the cross traded currencies)</code></summary>
+
+##### Parameters: e.g./crosscurrency
+
+</details>
+
+---

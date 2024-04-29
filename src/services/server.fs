@@ -24,6 +24,11 @@ open MongoDB.Driver
 open MongoDB.Bson
 open RealTimeTrading
 
+open System.Net.WebSockets
+open MongoDBUtil
+open System.Threading.Tasks
+open Microsoft.FSharp.Control
+
 open Logging.Logger
 let logger = createLogger
 
@@ -35,6 +40,22 @@ type TradingStrategy = {
     MaximalTradingValue: float
     Email: string
 }
+
+let startSubscriptions (uri: Uri) (apiKey: string) (pairs: string list) =
+    let makeSubscriptionParameters pair = $"XT.{pair}"
+    let tasks = pairs |> List.map (fun pair ->
+        let subscriptionParameters = makeSubscriptionParameters pair
+        // Assuming `realtime.start` is the function that takes Uri, apiKey, and parameters to start streaming
+        Async.StartAsTask (realtime.start (uri, apiKey, subscriptionParameters))
+    )
+    Task.WhenAll(tasks) |> Async.AwaitTask
+
+let startAllPairsSubscriptions () =
+    let uri = Uri("wss://socket.polygon.io/crypto")
+    let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
+    let pairs = fetchAllPairs "Arbitrage"
+    startSubscriptions uri apiKey pairs |> Async.RunSynchronously
+
 
 let tradingStrategyRoute =
     path "/strategies" >=> request (fun r ->
@@ -112,6 +133,6 @@ let webApp =
 
 [<EntryPoint>]
 let main argv =
-    let config = { defaultConfig with bindings = [ HttpBinding.createSimple HTTP "0.0.0.0" 8080 ] }
-    startWebServer config webApp
-    0 // Return an integer exit code
+        let config = { defaultConfig with bindings = [ HttpBinding.createSimple HTTP "0.0.0.0" 8080 ] }
+        startWebServer config webApp
+        0 // Return an integer exit code

@@ -57,3 +57,8 @@ let upsertDocumentById (collectionName: string) (id: string) (document: BsonDocu
     options.IsUpsert <- true
     collection.ReplaceOne(filter, document, options) |> ignore
 
+let fetchAllPairs (collectionName: string) : string list =
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+    let filter = Builders<BsonDocument>.Filter.Empty
+    let documents = collection.Find(filter).ToList()
+    documents |> Seq.toList |> List.map (fun doc -> doc.["pair"].AsString)
