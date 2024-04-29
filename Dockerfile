@@ -14,4 +14,5 @@ COPY --from=build-env /app/out ./
 ENTRYPOINT ["dotnet", "FuncProgFinalProj.dll"]
 
 #docker build -t funcprogfinalproj .
-#docker run -d --name myfuncapp funcprogfinalproj
+#docker run -d --name myfuncapp -p 8080:8080 funcprogfinalproj
+#docker build -f Dockerfile --platform linux/amd64 -t maomaosa/18656_05 .
