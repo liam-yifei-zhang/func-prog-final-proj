@@ -49,8 +49,8 @@ let tradingStrategyRoute =
             BsonElement("Email", BsonString Email)
         ])
         printfn "%A" document
-        let result = MongoDBUtil.insertDocument "TradingStrategies" document
-        OK (result.ToString())
+        MongoDBUtil.insertDocument "TradingStrategies" document
+        OK ("Trading strategy added")
 
     )
 
