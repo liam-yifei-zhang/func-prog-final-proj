@@ -86,12 +86,13 @@ let start(uri: Uri, apiKey: string, subscriptionParameters: string) =
 let main args =
 
     // test insert a single dummy document
+    
     let currencyPairCollectionName = "currencyPairs"
     let document = BsonDocument([
         BsonElement("pair", BsonString("BTC-USD"))
     ])
 
-    let result = MongoDBUtil.insertDocument currencyPairCollectionName document
+    let result = insertDocument currencyPairCollectionName document
 
     let documents = fetchAllDocuments(currencyPairCollectionName)
     for doc in documents do
