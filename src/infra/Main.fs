@@ -1,3 +1,4 @@
+module main
 open System
 open System.Net
 open System.Net.WebSockets
@@ -82,25 +83,3 @@ let start(uri: Uri, apiKey: string, subscriptionParameters: string) =
             do! receiveData wsClient
             }
          
-[<EntryPoint>]
-let main args =
-
-    // test insert a single dummy document
-    let currencyPairCollectionName = "currencyPairs"
-    let document = BsonDocument([
-        BsonElement("pair", BsonString("BTC-USD"))
-    ])
-
-    let result = MongoDBUtil.insertDocument currencyPairCollectionName document
-
-    let documents = fetchAllDocuments(currencyPairCollectionName)
-    for doc in documents do
-        printfn "%A" doc
-
-    
-
-    let uri = Uri("wss://socket.polygon.io/crypto")
-    let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
-    let subscriptionParameters = "XT.BTC-USD"
-    start (uri, apiKey, subscriptionParameters) |> Async.RunSynchronously
-    0
