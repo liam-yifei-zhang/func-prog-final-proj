@@ -1,168 +1,144 @@
-module Services.RealTimeTrading
-open Core.Domain
-open Infra.RealTimeTrading
-
-open System
-open System.Net
-open System.Net.WebSockets
-open System.Threading
-open System.Text
+module RealTimeTrading
 open System.Text.Json
+open System
+open MongoDBUtil
 
-type TradingParameter = {
-    minimalPriceSpread: decimal
-    minimalProfit: decimal
-    maximalTransactionValue: decimal
-    maximalTradingValue: decimal
+open System.Collections.Concurrent
+
+type PriceQuote = {
+    Event: string
+    Pair: string
+    Price: decimal
+    Timestamp: int64
+    Size: decimal
+    Conditions: int list
+    Id: string
+    ExchangeType: int
+    ResponseTime: int64
 }
 
-type MarketData = {
-    currencyPair: string
-    bidPrice: decimal
-    askPrice: decimal
-    exchangeName: string
+type TradingConfig = {
+    MinSpread: decimal
+    MinProfit: decimal
+    MaxTransactionAmount: decimal
+    MaxTradingValue: decimal
 }
 
-type TradingOpportunity = {
-    currencyPair: string
-    buyPrice: decimal
-    sellPrice: decimal
-    buyExchange: string
-    sellExchange: string
-    quantity: decimal
+let tradingConfig = {
+    MinSpread = 0.05M
+    MinProfit = 5.00M
+    MaxTransactionAmount = 2000.00M
+    MaxTradingValue = 5000.00M
 }
 
-type TradingOrder = {
-    currencyPair: string
-    orderType: string
-    quantity: decimal
-    price: decimal
-    exchangeName: string
-}
+let mutable tradingValue = 0M
+let priceStore = ConcurrentDictionary<string, (decimal * decimal)>()
 
-type DomainError =
-    | BelowMinimalProfit
-    | ExceedsMaximalTransactionValue
-    | ExceedsMaximalTradingValue
-    | NoOpportunityFound
-    | InvalidMarketData
+let processQuote (quote: PriceQuote) =
+    let currencyPairCollectionName = "currencyPairs"
+    let documents = fetchAllDocuments(currencyPairCollectionName)
+    for doc in documents do
+        printfn "%A" doc
 
-type Result<'a, 'b> =
-    | Success of 'a
-    | Failure of 'b
+    let updatePrices (bidAsk: (decimal * decimal) option) =
+        match bidAsk with
+        | Some (bid, ask) ->
+            if quote.Conditions[0] = 1 then // Bid
+                let newBid = min bid quote.Price
+                priceStore.AddOrUpdate(quote.Pair, (newBid, ask), fun _ _ -> (newBid, ask)) |> ignore
+            elif quote.Conditions[0] = 2 then // Ask
+                let newAsk = max ask quote.Price
+                priceStore.AddOrUpdate(quote.Pair, (bid, newAsk), fun _ _ -> (bid, newAsk)) |> ignore
+        | None ->
+            if quote.Conditions[0] = 1 then
+                priceStore.AddOrUpdate(quote.Pair, (quote.Price, Decimal.Zero), fun _ _ -> (quote.Price, Decimal.Zero)) |> ignore
+            elif quote.Conditions[0] = 2 then
+                priceStore.AddOrUpdate(quote.Pair, (Decimal.MaxValue, quote.Price), fun _ _ -> (Decimal.Zero, quote.Price)) |> ignore
 
-type UpdateResult =
-    | OpportunityFound of TradingOpportunity
-    | NoOpportunity of DomainError
+    let (exists, currentPrices) = priceStore.TryGetValue(quote.Pair)
+    updatePrices (if exists then Some currentPrices else None)
 
+    printfn "containsKey: %b" (priceStore.ContainsKey(quote.Pair))
+    if priceStore.ContainsKey(quote.Pair) then
+        let (bid, ask) = priceStore.[quote.Pair]
+        
+        printfn "bid: %M. ask: %M" bid ask
+        // Check if both bid and ask prices are available
+        if bid <> Decimal.MaxValue && ask <> Decimal.Zero then
+            let spread = ask - bid
+            printfn "spread: %M. MinSpread: %M" spread tradingConfig.MinSpread
+            if spread >= tradingConfig.MinSpread then
+                let transactionAmount = min tradingConfig.MaxTransactionAmount (tradingConfig.MaxTradingValue - tradingValue)
+                let possibleProfit = (spread - tradingConfig.MinSpread) * transactionAmount
+                printfn "possibleProfit: %M. MinProfit: %M" possibleProfit tradingConfig.MinProfit
+                if possibleProfit >= tradingConfig.MinProfit then
+                    tradingValue <- tradingValue + transactionAmount
+                    printfn "Arbitrage Opportunity: %A. Possible profit: %M on pair %s" quote.Timestamp possibleProfit quote.Pair
+                    
+                    let bidQuote = {
+                        Event = quote.Event
+                        Pair = quote.Pair
+                        Price = bid
+                        Timestamp = quote.Timestamp
+                        Size = quote.Size
+                        Conditions = quote.Conditions
+                        Id = quote.Id
+                        ExchangeType = 1
+                        ResponseTime = quote.ResponseTime
+                    }
+                    
+                    let askQuote = {
+                        Event = quote.Event
+                        Pair = quote.Pair
+                        Price = ask
+                        Timestamp = quote.Timestamp
+                        Size = quote.Size
+                        Conditions = quote.Conditions
+                        Id = quote.Id
+                        ExchangeType = 2
+                        ResponseTime = quote.ResponseTime
+                    }
 
-// Define a function to start the WebSocket client
-// Sample subscripton parameters: "XT.BTC-USD"
-// See https://polygon.io/docs/crypto/ws_getting-started
-let start(uri: Uri, apiKey: string, subscriptionParameters: string) =
-            async {
-            //Establish websockets connectivity
-            //Run underlying async workflow and await the result
-            let! wsClient = connectToWebSocket uri
-            //Authenticate with Polygon
-            sendJsonMessage wsClient { action = "auth"; params = apiKey }
-            //Subscribe to market data
-            sendJsonMessage wsClient { action = "subscribe" ; params = subscriptionParameters }
-            //Process market data
-            do! receiveData wsClient
-            }
-          
-         
+                    printfn "bidQuote: %s. askQuote: %s" bidQuote.Pair askQuote.Pair
+                    Some (bidQuote, askQuote)
+                else
+                    None
+            else
+                None
+        else
+            None
+    else
+        None
 
-
-let evaluateMarketData (data: MarketData) (parameters: TradingParameter): UpdateResult =
-    match data.bidPrice > 0m, data.askPrice > 0m with
-    | true, false ->
-        let quantity = min (parameters.maximalTransactionValue / data.bidPrice) (parameters.maximalTradingValue / data.bidPrice)
-        match quantity * data.bidPrice <= parameters.maximalTradingValue with
-        | true -> Success { currencyPair = data.currencyPair; buyPrice = data.bidPrice; sellPrice = 0m; buyExchange = data.exchangeName; sellExchange = ""; quantity = quantity }
-        | false -> Failure ExceedsMaximalTradingValue
-    | false, true | _, _ -> Failure InvalidMarketData
-
-let updateOpportunity (data: MarketData) (opp: TradingOpportunity): UpdateResult =
-    match data.exchangeName <> opp.buyExchange && data.askPrice > opp.buyPrice with
-    | true -> 
-        let profitPerUnit = data.askPrice - opp.buyPrice
-        let totalProfit = profitPerUnit * opp.quantity
-        match totalProfit > parameters.minimalProfit with
-        | true -> Success { opp with sellPrice = data.askPrice; sellExchange = data.exchangeName }
-        | false -> Failure BelowMinimalProfit
-    | false -> Failure NoOpportunityFound
-
-
-let processMarketDataPoint (data: MarketData) (parameters: TradingParameter) (existingOpportunity: Option<TradingOpportunity>) : UpdateResult =
-    match existingOpportunity with
-    | Some opp -> updateOpportunity data opp
-    | None -> evaluateMarketData data parameters
-
-let generateTradingOrders (opp: TradingOpportunity) : List<TradingOrder> =
-    match opp.sellPrice with
-    | price when price > 0m ->
-        [{ currencyPair = opp.currencyPair; orderType = "buy"; quantity = opp.quantity; price = opp.buyPrice; exchangeName = opp.buyExchange };
-         { currencyPair = opp.currencyPair; orderType = "sell"; quantity = opp.quantity; price = opp.sellPrice; exchangeName = opp.sellExchange }]
-    | _ -> []
-
-let processRealTimeDataFeed (dataFeed: seq<MarketData>) (parameters: TradingParameter) =
-    Seq.fold (fun (accOpportunity, accOrders) data ->
-        let result = processMarketDataPoint data parameters accOpportunity
-        match result with
-        | Success opp -> Success (Some opp, accOrders @ generateTradingOrders opp)
-        | Failure NoOpportunityFound -> Success (accOpportunity, accOrders)
-        | Failure err -> Failure err
-    ) (None, []) dataFeed
-
-// define a clientWebSocket
-let mutable private currentWebSocketClient: ClientWebSocket option = None
-
-// connect to a WebSocket
-let connectToWebSocket (uri: Uri) : Async<ClientWebSocket> = async {
-    let client = new ClientWebSocket()
-    do! client.ConnectAsync(uri, CancellationToken.None) |> Async.AwaitTask
-    currentWebSocketClient <- Some client
-    return client
-}
-
-// disconnect from a WebSocket
-let disconnectWebSocket () : Async<unit> = async {
-    match currentWebSocketClient with
-    | Some client when not client.CloseStatus.HasValue ->
-        do! client.CloseAsync(WebSocketCloseStatus.NormalClosure, "Stopping Trading", CancellationToken.None) |> Async.AwaitTask
-        currentWebSocketClient <- None
-    | _ -> ()
-}
-
-
-let startTrading (uri: Uri, apiKey: string, subscriptionParameters: string) : Async<unit> = async {
-    let! wsClient = connectToWebSocket uri
-    currentWebSocketClient <- Some wsClient
-    do! sendJsonMessage wsClient { action = "auth"; params = apiKey }
-    do! sendJsonMessage wsClient { action = "subscribe"; params = subscriptionParameters }
-    return! receiveData wsClient
-}
-
-
-let stopTrading () : Async<unit> = disconnectWebSocket()
-
-// send a JSON message to the WebSocket
-let sendJsonMessage (wsClient: ClientWebSocket) message =
-    let messageJson = JsonSerializer.Serialize(message)
-    let messageBytes = Encoding.UTF8.GetBytes(messageJson)
-    async {
-        do! wsClient.SendAsync(ArraySegment<byte>(messageBytes), WebSocketMessageType.Text, true, CancellationToken.None) |> Async.AwaitTask
-    } |> Async.RunSynchronously
-
-    [<EntryPoint>]
-let main args =
-    let uri = Uri("wss://socket.polygon.io/crypto")
-    let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
-    let subscriptionParameters = "XT.BTC-USD"
-    start (uri, apiKey, subscriptionParameters) |> Async.RunSynchronously
-
-    Async.Start (startTrading (uri, apiKey, subscriptionParameters))
-    
-    0   
+let parseQuoteFromMessage (message: string) =
+    try
+        let jsonOptions = JsonSerializerOptions()
+        jsonOptions.PropertyNameCaseInsensitive <- true
+        
+        let quoteJson = JsonSerializer.Deserialize<JsonElement>(message, jsonOptions)
+        
+        let event = quoteJson.[0].GetProperty("ev").GetString()
+        let pair = quoteJson.[0].GetProperty("pair").GetString()
+        let price = quoteJson.[0].GetProperty("p").GetDecimal()
+        let timestamp = quoteJson.[0].GetProperty("t").GetInt64()
+        let size = quoteJson.[0].GetProperty("s").GetDecimal()
+        let conditions = quoteJson.[0].GetProperty("c").EnumerateArray() |> Seq.map (fun (x: JsonElement) -> x.GetInt32()) |> Seq.toList
+        let id = quoteJson.[0].GetProperty("i").GetString()
+        let exchangeType = quoteJson.[0].GetProperty("x").GetInt32()
+        let responseTime = quoteJson.[0].GetProperty("r").GetInt64()
+        
+        let quote = {
+            Event = event
+            Pair = pair
+            Price = price
+            Timestamp = timestamp
+            Size = size
+            Conditions = conditions
+            Id = id
+            ExchangeType = exchangeType
+            ResponseTime = responseTime
+        }
+        
+        Ok quote
+    with
+    | ex -> Error ex.Message

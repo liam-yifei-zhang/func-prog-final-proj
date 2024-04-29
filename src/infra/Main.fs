@@ -7,6 +7,7 @@ open System.Text
 open MongoDBUtil
 open MongoDB.Driver
 open MongoDB.Bson
+open RealTimeTrading
 
 //TODO:
 //Utilize Result types for handling errors
@@ -45,6 +46,13 @@ let receiveData (wsClient: ClientWebSocket) : Async<unit> =
             // TODO: Process the message
             // You should define Polygon message types and message processing logic
             // You should also utilize Result types for error handling
+            let quoteResult = parseQuoteFromMessage message
+            match quoteResult with
+            | Ok quote ->
+                let quotePair = processQuote quote
+                quotePair |> ignore
+            | Error errMsg ->
+                printfn "Error parsing message: %s" errMsg
             return! receiveLoop ()
         | _ -> return! receiveLoop () // Ignore non-text messages
     }
@@ -78,11 +86,18 @@ let start(uri: Uri, apiKey: string, subscriptionParameters: string) =
 let main args =
 
     // test insert a single dummy document
+    let currencyPairCollectionName = "currencyPairs"
     let document = BsonDocument([
-        BsonElement("name", BsonString("Alice"))
+        BsonElement("pair", BsonString("BTC-USD"))
     ])
 
-    let _ = MongoDBUtil.insertDocument document
+    let result = MongoDBUtil.insertDocument currencyPairCollectionName document
+
+    let documents = fetchAllDocuments(currencyPairCollectionName)
+    for doc in documents do
+        printfn "%A" doc
+
+    
 
     let uri = Uri("wss://socket.polygon.io/crypto")
     let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
