@@ -87,3 +87,5 @@
 /home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/obj/Debug/net6.0/FuncProgFinalProj.genruntimeconfig.cache
 /Users/simonsun/Desktop/Desktop - hhh’s MacBook Air/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/Newtonsoft.Json.dll
 /Users/simonsun/Desktop/Desktop - hhh’s MacBook Air/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/Suave.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/Newtonsoft.Json.dll
+/home/shengan2/FP/func-prog-final-proj/FuncProgFinalProj/bin/Debug/net6.0/Suave.dll
