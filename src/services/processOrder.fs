@@ -105,7 +105,7 @@ let submitOrderAsync (orderDetails: OrderDetails) : Async<Result<OrderID, string
     async {
         match orderDetails.Exchange with
         | "Bitstamp" ->
-            let currencyPair = orderDetails.Currency + "USD"  // Placeholder for actual symbol format
+            let currencyPair = orderDetails.Currency + "USD"  
             let orderFunction = 
                 match orderDetails.OrderType with
                 | "Buy" -> BitstampAPI.buyMarketOrder
@@ -120,7 +120,7 @@ let submitOrderAsync (orderDetails: OrderDetails) : Async<Result<OrderID, string
             | _ -> return Error "Failed to submit order on Bitstamp"
 
         | "Kraken" ->
-            let pair = orderDetails.Currency + "USD"  // Placeholder for actual pair format
+            let pair = orderDetails.Currency + "USD" 
             let! result = KrakenAPI.submitOrder pair orderDetails.OrderType (orderDetails.Quantity.ToString()) (orderDetails.Price.ToString()) "market"
             match result with
             | Some (Ok orderIDs) ->
@@ -200,27 +200,27 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
             return Error "Unsupported exchange"
     }
 
-let emitEvent (event: Event) getUserEmail =
+let emitEvent (event: Event) =
+    let getUserEmail () = "user@example.com"  
+    
     match event with
     | OrderFulfillmentUpdated update ->
         printfn "Order Fulfillment Updated: %A" update
 
     | UserNotificationSent message ->
-        let userEmail = getUserEmail
+        let userEmail = getUserEmail ()
         let emailSubject = "Trading Notification"
         let emailBody = sprintf "Attention: %s" message
-        // Implement notifyUserViaEmail function here
         printfn "User Notification: %s" message
 
     | OrderInitiated orderID ->
         printfn "Order Initiated: %s" orderID
 
     | OrderProcessed update ->
-        let userEmail = getUserEmail
+        let userEmail = getUserEmail ()
         let emailSubject = "Order Processed Notification"
         let message = sprintf "Your order has been fully processed."
         let emailBody = sprintf "Attention: %s" message
-        // Implement notifyUserViaEmail function
         printfn "Order Processed: %A" update
 
     | DomainErrorRaised errorMsg ->

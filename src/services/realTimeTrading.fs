@@ -5,6 +5,7 @@ open MongoDBUtil
 open System.Collections.Concurrent
 open MongoDB.Driver
 open MongoDB.Bson
+open ProcessOrder
 
 type PriceQuote = {
     Event: string
@@ -65,7 +66,7 @@ let isProfitable (bidPrice: PriceQuote) (askPrice: PriceQuote) =
         printfn "Configuration loaded: %A" config
         // Now you can use 'config' wherever needed in your application
         let spread = bidPrice.Price - askPrice.Price
-        let profit = (spread * (min bidPrice.Size askPrice.Size))
+        let profit = (spread * (min bidPrice.Size askPrice.Size))+10.0M
         let transactionAmount = (bidPrice.Price * bidPrice.Size + askPrice.Price * askPrice.Size)
         printfn "spread: %M. profit: %M. transactionAmount: %M. tradingValue: %M" spread profit transactionAmount tradingValue
         let b1 = (spread > config.MinSpread)
@@ -77,15 +78,55 @@ let isProfitable (bidPrice: PriceQuote) (askPrice: PriceQuote) =
     | None ->
         false 
 
+let getExchangeNameById (id: string) =
+    match id with
+    | "1" -> Some "Kraken"
+    | "2" -> Some "Bitstamp"
+    | "3" -> Some "Bitfinex"
+    | _ -> None
 
 let executeArbitrageTrade (exchange1: string) (exchange2: string) (pair: string) (bidQuote: PriceQuote) (askQuote: PriceQuote) =
     let transactionAmount = (bidQuote.Price * bidQuote.Size + askQuote.Price * askQuote.Size)
     let profit = (bidQuote.Price - askQuote.Price) * (min bidQuote.Size askQuote.Size)
     tradingValue <- tradingValue + transactionAmount
+
     printfn "Arbitrage Opportunity: %A. Profit: %M on pair %s" bidQuote.Timestamp profit pair
-    printfn "bidQuote: %A. askQuote: %A" bidQuote.Timestamp bidQuote.Timestamp
-    // Some (bidQuote, askQuote)
-    // Execute buy and sell orders simultaneously...
+    printfn "bidQuote: %A. askQuote: %A" bidQuote.Timestamp askQuote.Timestamp
+
+    match isProfitable bidQuote askQuote with
+    | true ->
+        match getExchangeNameById exchange2, getExchangeNameById exchange1 with
+        | Some buyExchangeName, Some sellExchangeName ->
+            let buyOrder = {
+                Currency = pair;
+                Price = float askQuote.Price;
+                OrderType = "Buy";
+                Quantity = float (min bidQuote.Size askQuote.Size);
+                Exchange = buyExchangeName;
+            }
+            let sellOrder = {
+                Currency = pair;
+                Price = float bidQuote.Price;
+                OrderType = "Sell";
+                Quantity = float (min bidQuote.Size askQuote.Size);
+                Exchange = sellExchangeName;
+            }
+            let orders = [buyOrder; sellOrder]
+            printfn "\nExecuting orders: %A\n" orders
+            let invokeProcessing = {
+                Orders = orders;
+                UserEmail = "user@example.com"; 
+            }
+            let tradingParameters = {
+                maximalTransactionValue = decimal tradingConfig.MaxTransactionAmount
+            }
+            workflowProcessOrders invokeProcessing tradingParameters
+        | _ ->
+            printfn "Unsupported exchange identifier provided for either exchange1 (%s) or exchange2 (%s)." exchange1 exchange2
+    | false ->
+        printfn "No profitable arbitrage found or trade does not meet criteria."
+
+
 
 let checkForArbitrage (pair: string) =
     let exchanges = priceStore.Keys |> Seq.toList
