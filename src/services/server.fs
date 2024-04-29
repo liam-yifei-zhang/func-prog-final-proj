@@ -91,12 +91,19 @@ let startTrading =
         OK ("Trading started")
     )
 
+let stopTrading = 
+    path "/trade/stop" >=> request (fun r ->
+        realtime.stop()
+        OK ("Trading stopped")
+    )
+
 let webApp =
     choose [
         path "/" >=> OK "Welcome to Arbitrage Gainer "
         POST >=> choose [
             path "/strategies" >=> tradingStrategyRoute
-            path "/trade/start" >=> startTrading]
+            path "/trade/start" >=> startTrading
+            path "/trade/stop" >=> stopTrading]
         GET >=> choose [
             path "/crosscurrency" >=> getCrossCurrency
         ]
