@@ -1,41 +1,39 @@
 module MongoDBUtil
 
-    open MongoDB.Driver
-    open MongoDB.Bson
-    open System
+open MongoDB.Driver
+open MongoDB.Bson
+open System
+open System.Collections.Generic
 
-    // let connectionString = "your_connection_string_here"
-    // let databaseName = "cryptoDatabase"
-    // let collectionName = "transactions"
+let connectionString = "mongodb+srv://shenganw:6KUC4TDE9PAKQGvL@cluster0.pjwcuvc.mongodb.net/"
+let databaseName = "cryptoDatabase"
 
-    // let client = MongoClient(connectionString)
-    // let database = client.GetDatabase(databaseName)
-    // let collection = database.GetCollection<BsonDocument>(collectionName)
+let client = MongoClient(connectionString)
+let database = client.GetDatabase(databaseName)
 
-    // let insertDocument (document: BsonDocument) =
-    //     try
-    //         collection.InsertOne(document)
-    //         true
-    //     with
-    //     | ex: Exception ->
-    //         printfn "Error inserting document: %s" ex.Message
-    //         false
+type InsertOneResult =
+    | Inserted
+    | Failed of string
 
-    // let insertManyDocuments (documents: BsonDocument list) =
-    //     try
-    //         collection.InsertMany(documents)
-    //         true
-    //     with
-    //     | ex: Exception ->
-    //         printfn "Error inserting documents: %s" ex.Message
-    //         false
+let insertDocument (collectionName: string) (document: BsonDocument) =
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+    let result = collection.InsertOne(document)
+    // Hypothetical method result
+    result
 
-        // Dummy implementations for MongoDB interactions
+let insertManyDocuments (collectionName: string) (documents: BsonDocument list) =
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+    let result = collection.InsertMany(documents)
+    // Hypothetical method result
+    result
 
-    let insertDocument (document: BsonDocument) =
-        printfn "Mock Insert Document: %A" document
-        true  // Assume always successful for mock
+let fetchAllDocuments (collectionName: string) : BsonDocument list =
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+    let filter = Builders<BsonDocument>.Filter.Empty
+    let documents = collection.Find(filter).ToList()
+    documents |> Seq.toList
 
-    let insertManyDocuments (documents: BsonDocument list) =
-        printfn "Mock Insert Many Documents: %A" documents
-        true  // Assume always successful for mock
+let printAllDocuments (collectionName: string) =
+    let documents = fetchAllDocuments(collectionName)
+    for doc in documents do
+        printfn "%A" doc

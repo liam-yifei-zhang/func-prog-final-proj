@@ -78,11 +78,18 @@ let start(uri: Uri, apiKey: string, subscriptionParameters: string) =
 let main args =
 
     // test insert a single dummy document
+    let currencyPairCollectionName = "currencyPairs"
     let document = BsonDocument([
-        BsonElement("name", BsonString("Alice"))
+        BsonElement("pair", BsonString("BTC-USD"))
     ])
 
-    let _ = MongoDBUtil.insertDocument document
+    let result = MongoDBUtil.insertDocument currencyPairCollectionName document
+
+    let documents = fetchAllDocuments(currencyPairCollectionName)
+    for doc in documents do
+        printfn "%A" doc
+
+    
 
     let uri = Uri("wss://socket.polygon.io/crypto")
     let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
