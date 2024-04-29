@@ -5,6 +5,8 @@ open System.Net.Http
 open BitfinexAPI
 open KrakenAPI
 open BitstampAPI
+open System.Text.Json
+open System.Net.Mail
 
 type Currency = string
 type Price = float
@@ -13,6 +15,7 @@ type Quantity = float
 type Exchange = string
 type OrderID = string
 type FulfillmentStatus = string
+type testResponse = string
 
 type OrderDetails = {
     Currency: Currency
@@ -61,6 +64,23 @@ module Http =
             return response
         }
 
+let sendEmailNotification (recipient: string) (subject: string) (body: string) =
+    try
+        use smtpClient = new SmtpClient("smtp.example.com", 587)
+        smtpClient.EnableSsl <- true
+        smtpClient.Credentials <- new System.Net.NetworkCredential("your_email@example.com", "your_password")
+
+        let mailMessage = new MailMessage()
+        mailMessage.From <- new MailAddress("your_email@example.com")
+        mailMessage.To.Add(recipient)
+        mailMessage.Subject <- subject
+        mailMessage.Body <- body
+
+        smtpClient.Send(mailMessage)
+        Ok ()
+    with
+    | ex -> Error ex.Message
+
 let processApiResponse (response: HttpResponseMessage) : Async<Result<string, string>> =
     async {
         match response.IsSuccessStatusCode with
@@ -73,41 +93,47 @@ let processApiResponse (response: HttpResponseMessage) : Async<Result<string, st
 
 let parseOrderResponse (content: string) : Result<OrderID, string> =
     try
-        Ok "Extracted Order ID from response"  // Placeholder for actual JSON parsing logic
+        let jsonDocument = JsonDocument.Parse(content)
+        let rootElement = jsonDocument.RootElement
+        match rootElement.TryGetProperty("id") with
+        | true, property -> Ok (property.GetString())
+        | _ -> Error "Failed to parse order response: 'id' property not found"
     with
-    | _ -> Error "Failed to parse order response"
+    | ex -> Error (sprintf "Failed to parse order response: %s" ex.Message)
 
 let submitOrderAsync (orderDetails: OrderDetails) : Async<Result<OrderID, string>> = 
     async {
         match orderDetails.Exchange with
         | "Bitstamp" ->
-            let marketSymbol = orderDetails.Currency + "usd"  // Placeholder for actual symbol format
+            let currencyPair = orderDetails.Currency + "USD"  // Placeholder for actual symbol format
             let orderFunction = 
                 match orderDetails.OrderType with
                 | "Buy" -> BitstampAPI.buyMarketOrder
                 | "Sell" -> BitstampAPI.sellMarketOrder
                 | _ -> failwith "Invalid order type"
-            let! result = orderFunction marketSymbol (orderDetails.Quantity.ToString()) None
+            let! result = orderFunction currencyPair orderDetails.Quantity orderDetails.Price
             match result with
             | Ok (Some responseString) ->
                 match parseOrderResponse responseString with
                 | Ok orderID -> return Ok orderID
                 | Error errorMsg -> return Error errorMsg
-            | Ok None -> return Error "Empty response received"
-            | Error errorMsg -> return Error errorMsg
+            | _ -> return Error "Failed to submit order on Bitstamp"
 
         | "Kraken" ->
             let pair = orderDetails.Currency + "USD"  // Placeholder for actual pair format
             let! result = KrakenAPI.submitOrder pair orderDetails.OrderType (orderDetails.Quantity.ToString()) (orderDetails.Price.ToString()) "market"
             match result with
-            | Ok orderIDs -> return Ok orderIDs.[0]
-            | Error errorMsg -> return Error errorMsg
-
+            | Some (Ok orderIDs) ->
+                let orderID = orderIDs.[0]
+                return Ok orderID
+            | Some (Error errorMsg) -> return Error errorMsg
+            | None -> return Error "Failed to submit order on Kraken"
+        
         | "Bitfinex" ->
             let symbol = "t" + orderDetails.Currency.ToUpper() + "USD"
-            let! result = BitfinexAPI.submitOrder orderDetails.OrderType symbol (orderDetails.Quantity.ToString()) (orderDetails.Price.ToString())
+            let! result = BitfinexAPI.submitOrder "MARKET" symbol (orderDetails.Quantity.ToString()) (orderDetails.Price.ToString())
             match result with
-            | Some (Ok orderID) -> return Ok (orderID.ToString())
+            | Some (Ok orderId) -> return Ok (string orderId)
             | Some (Error errorMsg) -> return Error errorMsg
             | None -> return Error "Failed to submit order on Bitfinex"
         
@@ -124,11 +150,15 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
             | Ok (Some responseString) ->
                 match BitstampAPI.parseResponseOrderStatus responseString with
                 | Ok response ->
+                    let remainingQuantity =
+                        match Double.TryParse(response.AmountRemaining) with
+                        | true, quantity -> quantity
+                        | _ -> 0.0
                     let orderUpdate = {
                         OrderID = orderID
                         OrderDetails = orderDetails
                         FulfillmentStatus = response.Status
-                        RemainingQuantity = response.AmountRemaining |> float
+                        RemainingQuantity = remainingQuantity
                     }
                     return Ok orderUpdate
                 | Error errorMsg -> return Error errorMsg
@@ -136,24 +166,26 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
             | Error errorMsg -> return Error errorMsg
 
         | "Kraken" ->
-            let! statusResult = KrakenAPI.queryOrdersInfo orderID true None
+            let! statusResult = KrakenAPI.queryOrdersInfo orderID true
             match statusResult with
-            | Ok response ->
+            | Some (Ok response) ->
                 let orderInfo = response |> Map.toList |> List.head |> snd
                 let orderUpdate = {
                     OrderID = orderID
                     OrderDetails = orderDetails
                     FulfillmentStatus = orderInfo.Status
-                    RemainingQuantity = orderInfo.Vol_exec |> float
+                    RemainingQuantity = orderInfo.Vol |> float
                 }
                 return Ok orderUpdate
-            | Error errorMsg -> return Error errorMsg
-
+            | Some (Error errorMsg) -> return Error errorMsg
+            | None -> return Error "Failed to retrieve order status from Kraken"
+                
         | "Bitfinex" ->
-            let! statusResult = BitfinexAPI.retrieveOrderTrades orderDetails.Currency (int orderID)
+            let currencyPair = "t" + orderDetails.Currency.ToUpper() + "USD"
+            let! statusResult = BitfinexAPI.retrieveOrderTrades currencyPair (int orderID)
             match statusResult with
-            | Some (Ok response) ->
-                let executedQuantity = response |> List.sumBy (fun trade -> trade.ExecAmount)
+            | Some (Ok trades) ->
+                let executedQuantity = trades |> List.sumBy (fun trade -> trade.ExecAmount)
                 let orderUpdate = {
                     OrderID = orderID
                     OrderDetails = orderDetails
@@ -177,8 +209,8 @@ let emitEvent (event: Event) getUserEmail =
         let userEmail = getUserEmail
         let emailSubject = "Trading Notification"
         let emailBody = sprintf "Attention: %s" message
-        // Implement notifyUserViaEmail function
-        printfn "User Notification Sent: %s to %s" emailBody userEmail
+        // Implement notifyUserViaEmail function here
+        printfn "User Notification: %s" message
 
     | OrderInitiated orderID ->
         printfn "Order Initiated: %s" orderID
@@ -234,13 +266,4 @@ let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingPar
         match event with
         | UserNotificationSent message -> printfn "Notification: %s" message
         | OrderProcessed update -> printfn "Processed Update: %A" update
-        | _ -> ())  // Handle other events as needed
-
-// Example usage:
-let orders = [
-    { Currency = "BTC"; Price = 50000.0; OrderType = "Buy"; Quantity = 0.1; Exchange = "Bitstamp" }
-    { Currency = "ETH"; Price = 2000.0; OrderType = "Sell"; Quantity = 1.0; Exchange = "Kraken" }
-]
-let input = { Orders = orders; UserEmail = "example@example.com" }
-let parameters = { maximalTransactionValue = 2000m }
-workflowProcessOrders input parameters
+        | _ -> ())

@@ -7,6 +7,7 @@ open System.Text
 open MongoDBUtil
 open MongoDB.Driver
 open MongoDB.Bson
+open ProcessOrder
 
 //TODO:
 //Utilize Result types for handling errors
@@ -76,16 +77,28 @@ let start(uri: Uri, apiKey: string, subscriptionParameters: string) =
          
 [<EntryPoint>]
 let main args =
-
     // test insert a single dummy document
-    let document = BsonDocument([
-        BsonElement("name", BsonString("Alice"))
-    ])
+    // let document = BsonDocument([ BsonElement("name", BsonString("Alice")) ])
+    // let _ = MongoDBUtil.insertDocument document
 
-    let _ = MongoDBUtil.insertDocument document
+    // let uri = Uri("wss://socket.polygon.io/crypto")
+    // let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
+    // let subscriptionParameters = "XT.BTC-USD"
 
-    let uri = Uri("wss://socket.polygon.io/crypto")
-    let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
-    let subscriptionParameters = "XT.BTC-USD"
-    start (uri, apiKey, subscriptionParameters) |> Async.RunSynchronously
+    // // Start the WebSocket client
+    // start (uri, apiKey, subscriptionParameters) |> Async.Start
+
+    // Example usage of ProcessOrder module
+    let orders = [
+        //{ Currency = "FET"; Price = 22.45; OrderType = "Buy"; Quantity = 58.06; Exchange = "Bitstamp" }
+        { Currency = "FET"; Price = 58.14; OrderType = "Sell"; Quantity = 22.45; Exchange = "Kraken" }
+        //{ Currency = "DOT"; Price = 5.2529; OrderType = "Buy"; Quantity = 150.0; Exchange = "Bitfinex" }
+    ]
+    let input = { Orders = orders; UserEmail = "example@example.com" }
+    let parameters = { maximalTransactionValue = 200000m }
+    
+    // Run the order processing workflow
+    workflowProcessOrders input parameters
+
+    Console.ReadLine() |> ignore
     0
