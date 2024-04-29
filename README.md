@@ -115,24 +115,6 @@ Note that the file we provide may have dependencies from the core folder, those 
 
 #### POST Requests
 
-#### Speed Test
-
-<details>
- <summary><code>POST</code> <code><b>/speedTest</b></code> <code>(start the speedTest)</code></summary>
-
-##### Parameters
-
-##### Responses
-
-> | http code | content-type                 | response                                      |
-> |-----------|------------------------------|-----------------------------------------------|
-> | `200`     | `text/plain;charset=UTF-8`   | `SpeedTest start successfully `                   |                         
-> | `500`     | `text/plain;charset=UTF-8`   | `Internal Server Error`                       |
-
-</details>
-
----
-
 #### Start Trading
 
 <details>
@@ -177,7 +159,6 @@ Note that the file we provide may have dependencies from the core folder, those 
 ---
 
 
-#### GET Requests
 #### Post User Parameters
 
 <details>
@@ -196,6 +177,7 @@ Note that the file we provide may have dependencies from the core folder, those 
 </details>
 
 ---
+#### GET Requests
 #### All cross-traded currencies
 
 <details>
