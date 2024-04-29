@@ -37,3 +37,11 @@ let printAllDocuments (collectionName: string) =
     let documents = fetchAllDocuments(collectionName)
     for doc in documents do
         printfn "%A" doc
+
+let upsertDocumentById (collectionName: string) (id: string) (document: BsonDocument) =
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+    let objectId = ObjectId.Parse(id)  // Parse the string ID to ObjectId
+    let filter = Builders<BsonDocument>.Filter.Eq("_id", objectId)
+    let options = new UpdateOptions()
+    options.IsUpsert <- true
+    collection.ReplaceOne(filter, document, options) |> ignore

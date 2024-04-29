@@ -49,7 +49,7 @@ let tradingStrategyRoute =
             BsonElement("Email", BsonString Email)
         ])
         printfn "%A" document
-        MongoDBUtil.insertDocument "TradingStrategies" document
+        MongoDBUtil.upsertDocumentById "TradingStrategies" "662f3548bf3c97e2a2d0e07d" document
         OK ("Trading strategy added")
 
     )
