@@ -7,6 +7,7 @@ open System.Text
 open MongoDBUtil
 open MongoDB.Driver
 open MongoDB.Bson
+open RealTimeTrading
 
 //TODO:
 //Utilize Result types for handling errors
@@ -45,6 +46,13 @@ let receiveData (wsClient: ClientWebSocket) : Async<unit> =
             // TODO: Process the message
             // You should define Polygon message types and message processing logic
             // You should also utilize Result types for error handling
+            let quoteResult = parseQuoteFromMessage message
+            match quoteResult with
+            | Ok quote ->
+                let quotePair = processQuote quote
+                quotePair |> ignore
+            | Error errMsg ->
+                printfn "Error parsing message: %s" errMsg
             return! receiveLoop ()
         | _ -> return! receiveLoop () // Ignore non-text messages
     }
