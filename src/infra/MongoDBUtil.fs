@@ -39,6 +39,7 @@ let printAllDocuments (collectionName: string) =
     for doc in documents do
         printfn "%A" doc
 
+
 let createUniqueIndex (collectionName: string) (indexField: string) =
     let collection = database.GetCollection<BsonDocument>(collectionName)
     let keys = Builders<BsonDocument>.IndexKeys.Ascending(indexField)
@@ -46,4 +47,13 @@ let createUniqueIndex (collectionName: string) (indexField: string) =
     options.Unique <- true
     let indexModel = new CreateIndexModel<BsonDocument>(keys, options)
     collection.Indexes.CreateOne(indexModel)
+
+
+let upsertDocumentById (collectionName: string) (id: string) (document: BsonDocument) =
+    let collection = database.GetCollection<BsonDocument>(collectionName)
+    let objectId = ObjectId.Parse(id)  // Parse the string ID to ObjectId
+    let filter = Builders<BsonDocument>.Filter.Eq("_id", objectId)
+    let options = new UpdateOptions()
+    options.IsUpsert <- true
+    collection.ReplaceOne(filter, document, options) |> ignore
 
