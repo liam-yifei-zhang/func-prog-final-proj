@@ -8,7 +8,12 @@
 
   <ItemGroup>
     <Compile Include="Library.fs" />
+    <Compile Include="../src/core/domain.fs" />
+    <Compile Include="../src/infra/BitstampAPI.fs" />
+    <Compile Include="../src/infra/BitfinexAPI.fs" />
+    <Compile Include="../src/infra/KrakenAPI.fs" />
     <Compile Include="../src/infra/MongoDBUtil.fs" />
+    <Compile Include="../src/services/processOrder.fs" />
     <Compile Include="../src/services/realTimeTrading.fs" />
     <Compile Include="../src/infra/realtime.fs" />
     <Compile Include="../src/services/cryptoData.fs" />

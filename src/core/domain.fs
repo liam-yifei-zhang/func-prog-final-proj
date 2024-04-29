@@ -1,6 +1,4 @@
-namespace Core.Domain
-
-module Core.Domain
+module Domain
 
 type CurrencyPair = string * string
 
@@ -54,7 +52,7 @@ type EventQuote = {
     bp: float
     bs: float
     ap: float
-    as: float
+    ``as``: float
     t: int
     x: int
     r: int

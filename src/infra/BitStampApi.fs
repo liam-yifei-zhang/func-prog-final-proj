@@ -3,11 +3,14 @@ module BitstampAPI
 open System
 open System.Net.Http
 open System.Text
-open Newtonsoft.Json
+open System.Text.Json
+open System.Collections.Generic
 
 type Transaction = {
     Tid: int64
     Price: string
+    Currency1: string
+    Currency2: string
     Fee: string
     Datetime: string
     Type: int
@@ -16,7 +19,7 @@ type Transaction = {
 type BitstampOrderResponse = {
     Id: int64
     Datetime: string
-    OrderType: string
+    Type: string
     Status: string
     Market: string
     Transactions: Transaction[]
@@ -28,63 +31,38 @@ let private httpClient = new HttpClient()
 
 let parseResponseOrderStatus (jsonString: string) : Result<BitstampOrderResponse, string> =
     try
-        match JsonConvert.DeserializeObject<BitstampOrderResponse>(jsonString) with
-        | parsedResponse -> Result.Ok parsedResponse
-        | exception ex -> Result.Error (sprintf "JSON parsing error: %s" ex.Message)
+        let options = JsonSerializerOptions()
+        options.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+        let parsedResponse = JsonSerializer.Deserialize<BitstampOrderResponse>(jsonString, options)
+        Result.Ok parsedResponse
     with
-    | ex: Newtonsoft.Json.JsonException -> 
-        Result.Error (sprintf "JSON parsing error: %s" ex.Message)
+    | ex -> Result.Error (sprintf "JSON parsing error: %s" ex.Message)
 
 let postRequest (url: string) (data: (string * string) list) =
     async {
-        let content = new FormUrlEncodedContent(data |> Seq.map (fun (k, v) -> new System.Collections.Generic.KeyValuePair<string, string>(k, v)))
-        let! response = Async.AwaitTask (httpClient.PostAsync(url, content))
+        printfn "Posting request to %A" data
+        let content = new FormUrlEncodedContent(data |> Seq.map (fun (k, v) -> KeyValuePair(k, v)))
+        let! response = httpClient.PostAsync(url, content) |> Async.AwaitTask
         match response.IsSuccessStatusCode with
-        | true -> 
-            let! responseString = Async.AwaitTask (response.Content.ReadAsStringAsync())
-            Debug.WriteLine($"Response JSON: {responseString}")
-            Some responseString |> Result.Ok
-        | _ -> 
-            Debug.WriteLine($"Error: {response.StatusCode}")
-            None |> Result.Error "Failed to execute post request."
+        | true ->
+            let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return Result.Ok (Some responseString)
+        | _ -> return Result.Error "Failed to execute post request."
     }
 
-let buyMarketOrder (marketSymbol: string) (amount: string) (clientOrderId: Option<string>) =
-    let url = sprintf "https://www.bitstamp.net/api/v2/buy/market/%s/" (marketSymbol.ToLower())
-    let data = 
-        [ "amount", amount ] @ 
-        (match clientOrderId with 
-         | Some id -> [ "client_order_id", id ] 
-         | _ -> [])
+let buyMarketOrder (currencyPair: string) (amount: float) (price: float) =
+    let url = sprintf "https://18656-testing-server.azurewebsites.net/order/place/api/v2/buy/market/%s/" (currencyPair.ToLower())
+    let data = [ "amount", amount.ToString(); "price", price.ToString() ]
     postRequest url data
 
-let sellMarketOrder (marketSymbol: string) (amount: string) (clientOrderId: Option<string>) =
-    let url = sprintf "https://www.bitstamp.net/api/v2/sell/market/%s/" (marketSymbol.ToLower())
-    let data = 
-        [ "amount", amount ] @ 
-        (match clientOrderId with 
-         | Some id -> [ "client_order_id", id ] 
-         | _ -> [])
+let sellMarketOrder (currencyPair: string) (amount: float) (price: float) =
+    let url = sprintf "https://18656-testing-server.azurewebsites.net/order/place/api/v2/sell/market/%s/" (currencyPair.ToLower())
+    let requestBody = sprintf "amount=%f&price=%f" 22.45 58.06
+    printfn "Request body: %s" requestBody
+    let data = [ "amount", amount.ToString(); "price", price.ToString() ]
     postRequest url data
 
 let orderStatus (orderId: string) =
-    let url = "https://www.bitstamp.net/api/v2/order_status/"
+    let url = "https://18656-testing-server.azurewebsites.net/order/status/api/v2/order_status/"
     let data = [ "id", orderId ]
     postRequest url data
-
-let fetchBitstampPairs = async {
-    let url = "https://www.bitstamp.net/api/v2/trading-pairs-info/"
-    try
-        let! response = httpClient.GetAsync(url) |> Async.AwaitTask
-        if response.IsSuccessStatusCode then
-            let! jsonResponse = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            let pairs = JsonConvert.DeserializeObject<_[]>(jsonResponse)
-            let symbolList = pairs |> Array.map (fun x -> x.["url_symbol"].ToString())
-            return Result.Ok symbolList
-        else
-            return Result.Error "Failed to fetch Bitstamp pairs due to HTTP error."
-    with
-    | ex ->
-        return Result.Error (sprintf "Failed to fetch Bitstamp pairs: %s" ex.Message)
-}
-

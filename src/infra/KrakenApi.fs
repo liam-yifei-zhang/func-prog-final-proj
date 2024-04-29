@@ -1,8 +1,9 @@
 module KrakenAPI
 
+open System
 open System.Net.Http
 open System.Text
-open Newtonsoft.Json
+open System.Text.Json
 
 type SubmitDescription = {
     order: string
@@ -15,12 +16,12 @@ type SubmitResult = {
 
 type KrakenSubmitResponse = {
     error: string[]
-    result: SubmitResult
+    result: SubmitResult option
 }
 
 type OrderDescription = {
     Pair: string
-    OrderType: string
+    Type: string
     Ordertype: string
     Price: string
     Price2: string
@@ -57,81 +58,70 @@ type KrakenOrderResponse = {
     Result: Map<string, OrderInfo>
 }
 
-let private httpClient = new HttpClient()
+let httpClient = new HttpClient()
+
+let generateNonce () =
+    let timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+    let random = Random().Next(1000, 9999)
+    timestamp * 10000L + int64 random
 
 let parseKrakenSubmitResponse (jsonString: string) : Result<string[], string> =
     try
-        let parsedResponse = JsonConvert.DeserializeObject<KrakenSubmitResponse>(jsonString)
+        let parsedResponse = JsonSerializer.Deserialize<KrakenSubmitResponse>(jsonString)
         match parsedResponse.error with
-        | error when error.Length > 0 -> Result.Error (String.Join("; ", error))
-        | _ -> Result.Ok parsedResponse.result.txid
+        | error when error.Length > 0 -> Result.Error (String.concat "; " error)
+        | _ ->
+            match parsedResponse.result with
+            | Some result ->
+                match result.txid with
+                | txid when txid.Length > 0 -> Result.Ok txid
+                | _ -> Result.Error "No transaction IDs found in the response"
+            | None -> Result.Error "The 'result' field is missing in the response"
     with
-    | ex: Newtonsoft.Json.JsonException -> 
-        Result.Error (sprintf "JSON parsing error: %s" ex.Message)
+    | ex -> Result.Error (sprintf "Kraken API JSON parsing error: %s" ex.Message)
 
 let parseKrakenOrderResponse (jsonString: string) : Result<Map<string, OrderInfo>, string> =
     try
-        let parsedResponse = JsonConvert.DeserializeObject<KrakenOrderResponse>(jsonString)
+        let parsedResponse = JsonSerializer.Deserialize<KrakenOrderResponse>(jsonString)
         match parsedResponse.Error with
-        | error when error.Length > 0 -> Result.Error (String.Join("; ", error))
-        | _ -> Result.Ok parsedResponse.Result
+        | error when error.Length > 0 -> Result.Error (String.concat "; " error)
+        | _ ->
+            match parsedResponse.Result with
+            | result when result.Count > 0 -> Result.Ok result
+            | _ -> Result.Error "No order information found in the response"
     with
-    | ex: Newtonsoft.Json.JsonException -> 
-        Result.Error (sprintf "JSON parsing error: %s" ex.Message)
+    | ex -> Result.Error (sprintf "Kraken API JSON parsing error: %s" ex.Message)
 
 let submitOrder (pair: string) (orderType: string) (volume: string) (price: string) (orderTypeSpecific: string) =
     async {
-        let url = "https://api.kraken.com/0/private/AddOrder"
-        let nonce = generateNonce ()
-        let payload = sprintf "nonce=%i&pair=%s&type=%s&ordertype=%s&price=%s&volume=%s" nonce pair orderType orderTypeSpecific price volume
+        let url = "https://18656-testing-server.azurewebsites.net/order/place/0/private/AddOrder"
+        let nonce = generateNonce()
+        let payload = sprintf "nonce=%i&ordertype=%s&type=%s&volume=%s&pair=%s&price=%s" nonce orderTypeSpecific orderType volume pair price
         let content = new StringContent(payload, Encoding.UTF8, "application/x-www-form-urlencoded")
         let! response = httpClient.PostAsync(url, content) |> Async.AwaitTask
         match response.IsSuccessStatusCode with
         | true ->
-            let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            return parseKrakenSubmitResponse responseString
-        | _ -> return Result.Error "Failed to submit order due to HTTP error"
+            let! responseJson = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return Some (parseKrakenSubmitResponse responseJson)
+        | false -> return Some (Error "Failed to submit order")
     }
 
-let queryOrdersInfo (transactionIds: string) (includeTrades: bool) (userRef: int option) =
+let queryOrdersInfo (transactionId: string) (includeTrades: bool) =
     async {
-        let url = "https://api.kraken.com/0/private/QueryOrders"
-        let nonce = generateNonce ()
-        let basePayload = sprintf "nonce=%i&txid=%s" nonce transactionIds
-        let tradePayload = match includeTrades with
-                           | true -> "&trades=true"
-                           | false -> ""
-        let userRefPayload = match userRef with
-                             | Some ref -> sprintf "&userref=%d" ref
-                             | None -> ""
-        let payload = basePayload + tradePayload + userRefPayload
+        let url = "https://18656-testing-server.azurewebsites.net/order/status/0/private/QueryOrders"
+        let nonce = generateNonce()
+        let payload = sprintf "nonce=%i&txid=%s&trades=%b" nonce transactionId includeTrades
         let content = new StringContent(payload, Encoding.UTF8, "application/x-www-form-urlencoded")
-        
+
         httpClient.DefaultRequestHeaders.Clear()
-        
+        httpClient.DefaultRequestHeaders.Add("Content-Type", "application/x-www-form-urlencoded")
+
         let! response = httpClient.PostAsync(url, content) |> Async.AwaitTask
         match response.IsSuccessStatusCode with
         | true ->
-            let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            return parseKrakenOrderResponse responseString
-        | _ -> return Result.Error "Failed to query order info due to HTTP error"
+            let! responseJson = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            match parseKrakenOrderResponse responseJson with
+            | Ok result -> return Some (Ok result)
+            | Error errorMsg -> return Some (Error errorMsg)
+        | false -> return Some (Error "Failed to query order info")
     }
-
-let fetchKrakenPairs = async {
-    let url = "https://api.kraken.com/0/public/AssetPairs"
-    try
-        let! response = httpClient.GetAsync(url) |> Async.AwaitTask
-        if response.IsSuccessStatusCode then
-            let! jsonResponse = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            let parsedJson = JsonConvert.DeserializeObject<JObject>(jsonResponse)
-            let pairs = parsedJson.["result"]
-                        |> JObject.Properties
-                        |> Seq.map (fun p -> p.Name)
-                        |> Seq.toList
-            return Result.Ok pairs
-        else
-            return Result.Error "Failed to fetch Kraken pairs due to HTTP error."
-    with
-    | ex ->
-        return Result.Error (sprintf "Failed to fetch Kraken pairs: %s" ex.Message)
-}
