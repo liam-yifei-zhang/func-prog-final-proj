@@ -105,6 +105,7 @@ let getCrossCurrency =
 
 let startTrading = 
     path "/trade/start" >=> request (fun r ->
+        logger "Trading started"
         let uri = Uri("wss://socket.polygon.io/crypto")
         let apiKey = "phN6Q_809zxfkeZesjta_phpgQCMB2Dw"
         let subscriptionParameters = "XT.BTC-USD"

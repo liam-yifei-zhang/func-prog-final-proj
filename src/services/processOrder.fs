@@ -11,6 +11,9 @@ open MongoDBUtil
 open MongoDB.Bson
 open MongoDB.Driver
 
+open Logging.Logger
+let logger = createLogger
+
 type Currency = string
 type Price = float
 type OrderType = string
@@ -347,6 +350,7 @@ let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingPar
                 let result =
                     async {
                         let! orderResult = submitOrderAsync orderDetails
+                        logger "submitOrderAsync completed"
                         match orderResult with
                         | Ok orderID ->
                             printfn "Order Submitted: %s" orderID

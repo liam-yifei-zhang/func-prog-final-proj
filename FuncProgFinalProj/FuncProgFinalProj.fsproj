@@ -7,6 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="../src/services/Logger.fs" />
     <Compile Include="Library.fs" />
     <Compile Include="../src/core/domain.fs" />
     <Compile Include="../src/infra/BitStampApi.fs" />
@@ -17,7 +18,6 @@
     <Compile Include="../src/services/realTimeTrading.fs" />
     <Compile Include="../src/infra/realtime.fs" />
     <Compile Include="../src/services/cryptoData.fs" />
-    <Compile Include="../src/services/Logger.fs" />
     <Compile Include="../src/services/server.fs" />
   </ItemGroup>
 
