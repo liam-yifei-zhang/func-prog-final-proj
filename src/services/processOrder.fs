@@ -7,6 +7,9 @@ open KrakenAPI
 open BitstampAPI
 open System.Text.Json
 open System.Net.Mail
+open MongoDBUtil
+open MongoDB.Bson
+open MongoDB.Driver
 
 type Currency = string
 type Price = float
@@ -66,20 +69,45 @@ module Http =
 
 let sendEmailNotification (recipient: string) (subject: string) (body: string) =
     try
-        use smtpClient = new SmtpClient("smtp.example.com", 587)
+        use smtpClient = new SmtpClient("smtp.gmail.com", 587) 
         smtpClient.EnableSsl <- true
-        smtpClient.Credentials <- new System.Net.NetworkCredential("your_email@example.com", "your_password")
-
+        smtpClient.Credentials <- new System.Net.NetworkCredential("simoniharden@gmail.com", "gxlk gyms skgi bepr") 
         let mailMessage = new MailMessage()
-        mailMessage.From <- new MailAddress("your_email@example.com")
+        mailMessage.From <- new MailAddress("simoniharden@gmail.com") 
         mailMessage.To.Add(recipient)
         mailMessage.Subject <- subject
         mailMessage.Body <- body
-
         smtpClient.Send(mailMessage)
         Ok ()
     with
-    | ex -> Error ex.Message
+    | ex ->
+        printfn "Exception occurred while sending email: %s" ex.Message
+        printfn "Exception StackTrace: %s" ex.StackTrace
+        Error ex.Message
+
+let serializeOrderDetails orderID orderDetails =
+    let orderDetailsObj = 
+        {| OrderID = orderID
+           OrderDetails = 
+               {| Currency = orderDetails.Currency
+                  Price = orderDetails.Price
+                  OrderType = orderDetails.OrderType
+                  Quantity = orderDetails.Quantity
+                  Exchange = orderDetails.Exchange |} |}
+    System.Text.Json.JsonSerializer.Serialize(orderDetailsObj)
+
+let serializeOrderUpdate (orderUpdate: OrderUpdate) =
+    let orderUpdateObj = 
+        {| OrderID = orderUpdate.OrderID
+           OrderDetails = 
+               {| Currency = orderUpdate.OrderDetails.Currency
+                  Price = orderUpdate.OrderDetails.Price
+                  OrderType = orderUpdate.OrderDetails.OrderType
+                  Quantity = orderUpdate.OrderDetails.Quantity
+                  Exchange = orderUpdate.OrderDetails.Exchange |}
+           FulfillmentStatus = orderUpdate.FulfillmentStatus
+           RemainingQuantity = orderUpdate.RemainingQuantity |}
+    JsonSerializer.Serialize(orderUpdateObj)
 
 let processApiResponse (response: HttpResponseMessage) : Async<Result<string, string>> =
     async {
@@ -112,10 +140,15 @@ let submitOrderAsync (orderDetails: OrderDetails) : Async<Result<OrderID, string
                 | "Sell" -> BitstampAPI.sellMarketOrder
                 | _ -> failwith "Invalid order type"
             let! result = orderFunction currencyPair orderDetails.Quantity orderDetails.Price
+            printfn "Bitstamp order result: %A" result
             match result with
             | Ok (Some responseString) ->
                 match parseOrderResponse responseString with
-                | Ok orderID -> return Ok orderID
+                | Ok orderID ->
+                    let orderDetailsJson = serializeOrderDetails orderID orderDetails
+                    let orderDetailsDoc = BsonDocument.Parse(orderDetailsJson)
+                    MongoDBUtil.insertDocument "orderDetails" orderDetailsDoc |> ignore
+                    return Ok orderID
                 | Error errorMsg -> return Error errorMsg
             | _ -> return Error "Failed to submit order on Bitstamp"
 
@@ -125,6 +158,9 @@ let submitOrderAsync (orderDetails: OrderDetails) : Async<Result<OrderID, string
             match result with
             | Some (Ok orderIDs) ->
                 let orderID = orderIDs.[0]
+                let orderDetailsJson = serializeOrderDetails orderID orderDetails
+                let orderDetailsDoc = BsonDocument.Parse(orderDetailsJson)
+                MongoDBUtil.insertDocument "orderDetails" orderDetailsDoc |> ignore
                 return Ok orderID
             | Some (Error errorMsg) -> return Error errorMsg
             | None -> return Error "Failed to submit order on Kraken"
@@ -133,7 +169,12 @@ let submitOrderAsync (orderDetails: OrderDetails) : Async<Result<OrderID, string
             let symbol = "t" + orderDetails.Currency.ToUpper() + "USD"
             let! result = BitfinexAPI.submitOrder "MARKET" symbol (orderDetails.Quantity.ToString()) (orderDetails.Price.ToString())
             match result with
-            | Some (Ok orderId) -> return Ok (string orderId)
+            | Some (Ok orderId) ->
+                let orderID = string orderId
+                let orderDetailsJson = serializeOrderDetails orderID orderDetails
+                let orderDetailsDoc = BsonDocument.Parse(orderDetailsJson)
+                MongoDBUtil.insertDocument "orderDetails" orderDetailsDoc |> ignore
+                return Ok orderID
             | Some (Error errorMsg) -> return Error errorMsg
             | None -> return Error "Failed to submit order on Bitfinex"
         
@@ -157,10 +198,30 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
                     let orderUpdate = {
                         OrderID = orderID
                         OrderDetails = orderDetails
-                        FulfillmentStatus = response.Status
+                        FulfillmentStatus = 
+                            match response.Status with
+                            | "Finished" -> "FullyFulfilled"
+                            | "Open" -> "PartiallyFulfilled"
+                            | _ -> "OneSideFilled"
                         RemainingQuantity = remainingQuantity
                     }
-                    return Ok orderUpdate
+                    
+                    match orderUpdate.FulfillmentStatus with
+                    | "OneSideFilled" ->
+                        let userEmail = "ashishkj@andrew.cmu.edu" 
+                        let emailSubject = "Order Partially Filled Notification"
+                        let message = sprintf "Your order %s has only one side filled." orderID
+                        let emailBody = sprintf "Attention: %s" message
+                        match sendEmailNotification userEmail emailSubject emailBody with
+                        | Ok () ->
+                            let orderUpdateJson = serializeOrderUpdate orderUpdate
+                            let transactionHistoryDoc = BsonDocument.Parse(orderUpdateJson)
+                            MongoDBUtil.insertDocument "testTransactionHistory" transactionHistoryDoc |> ignore
+                            return Ok orderUpdate
+                        | Error errorMsg ->
+                            return Error errorMsg
+                    | _ ->
+                        return Ok orderUpdate
                 | Error errorMsg -> return Error errorMsg
             | Ok None -> return Error "Empty response received from Bitstamp"
             | Error errorMsg -> return Error errorMsg
@@ -173,10 +234,30 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
                 let orderUpdate = {
                     OrderID = orderID
                     OrderDetails = orderDetails
-                    FulfillmentStatus = orderInfo.Status
+                    FulfillmentStatus = 
+                        match orderInfo.Status with
+                        | "closed" -> "FullyFulfilled"
+                        | "open" -> "PartiallyFulfilled"
+                        | _ -> "OneSideFilled"
                     RemainingQuantity = orderInfo.Vol |> float
                 }
-                return Ok orderUpdate
+                
+                match orderUpdate.FulfillmentStatus with
+                | "OneSideFilled" ->
+                    let userEmail = "ashishkj@andrew.cmu.edu" 
+                    let emailSubject = "Order Partially Filled Notification"
+                    let message = sprintf "Your order %s has only one side filled." orderID
+                    let emailBody = sprintf "Attention: %s" message
+                    match sendEmailNotification userEmail emailSubject emailBody with
+                    | Ok () ->
+                        let orderUpdateJson = serializeOrderUpdate orderUpdate
+                        let transactionHistoryDoc = BsonDocument.Parse(orderUpdateJson)
+                        MongoDBUtil.insertDocument "testTransactionHistory" transactionHistoryDoc |> ignore
+                        return Ok orderUpdate
+                    | Error errorMsg ->
+                        return Error errorMsg
+                | _ ->
+                    return Ok orderUpdate
             | Some (Error errorMsg) -> return Error errorMsg
             | None -> return Error "Failed to retrieve order status from Kraken"
                 
@@ -189,10 +270,29 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
                 let orderUpdate = {
                     OrderID = orderID
                     OrderDetails = orderDetails
-                    FulfillmentStatus = if executedQuantity = orderDetails.Quantity then "FullyFulfilled" else "PartiallyFulfilled"
+                    FulfillmentStatus = 
+                        if executedQuantity = orderDetails.Quantity then "FullyFulfilled"
+                        elif executedQuantity > 0.0 then "PartiallyFulfilled"
+                        else "OneSideFilled"
                     RemainingQuantity = orderDetails.Quantity - executedQuantity
                 }
-                return Ok orderUpdate
+                
+                match orderUpdate.FulfillmentStatus with
+                | "OneSideFilled" ->
+                    let userEmail = "ashishkj@andrew.cmu.edu" 
+                    let emailSubject = "Order Partially Filled Notification"
+                    let message = sprintf "Your order %s has only one side filled." orderID
+                    let emailBody = sprintf "Attention: %s" message
+                    match sendEmailNotification userEmail emailSubject emailBody with
+                    | Ok () ->
+                        let orderUpdateJson = serializeOrderUpdate orderUpdate
+                        let transactionHistoryDoc = BsonDocument.Parse(orderUpdateJson)
+                        MongoDBUtil.insertDocument "testTransactionHistory" transactionHistoryDoc |> ignore
+                        return Ok orderUpdate
+                    | Error errorMsg ->
+                        return Error errorMsg
+                | _ ->
+                    return Ok orderUpdate
             | Some (Error errorMsg) -> return Error errorMsg
             | None -> return Error "Failed to retrieve order status from Bitfinex"
 
@@ -201,8 +301,8 @@ let retrieveAndUpdateOrderStatus (orderID: OrderID) (orderDetails: OrderDetails)
     }
 
 let emitEvent (event: Event) =
-    let getUserEmail () = "user@example.com"  
-    
+    let getUserEmail () = "simoniharden@gmail.com"  
+
     match event with
     | OrderFulfillmentUpdated update ->
         printfn "Order Fulfillment Updated: %A" update
@@ -211,7 +311,9 @@ let emitEvent (event: Event) =
         let userEmail = getUserEmail ()
         let emailSubject = "Trading Notification"
         let emailBody = sprintf "Attention: %s" message
-        printfn "User Notification: %s" message
+        match sendEmailNotification userEmail emailSubject emailBody with
+        | Ok () -> printfn "User Notification Sent: %s" message
+        | Error errorMsg -> printfn "Failed to send user notification: %s" errorMsg
 
     | OrderInitiated orderID ->
         printfn "Order Initiated: %s" orderID
@@ -219,9 +321,11 @@ let emitEvent (event: Event) =
     | OrderProcessed update ->
         let userEmail = getUserEmail ()
         let emailSubject = "Order Processed Notification"
-        let message = sprintf "Your order has been fully processed."
+        let message = "Your order has been fully processed."
         let emailBody = sprintf "Attention: %s" message
-        printfn "Order Processed: %A" update
+        match sendEmailNotification userEmail emailSubject emailBody with
+        | Ok () -> printfn "Order Processed Notification Sent: %A" update
+        | Error errorMsg -> printfn "Failed to send order processed notification: %s" errorMsg
 
     | DomainErrorRaised errorMsg ->
         printfn "Domain Error Raised: %s" errorMsg
@@ -229,36 +333,43 @@ let emitEvent (event: Event) =
 let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingParameter) =
     let processOrder (acc, results) orderDetails =
         let currentTransactionValue = acc + (decimal orderDetails.Quantity * decimal orderDetails.Price)
-        if currentTransactionValue > parameters.maximalTransactionValue then
-            let errorEvent = DomainErrorRaised "Maximal transaction value exceeded. Halting trading."
-            let notificationEvent = UserNotificationSent "Maximal transaction value exceeded. Halting trading."
-            (acc, results @ [notificationEvent; errorEvent])
-        else
-            let result =
-                async {
-                    let! orderResult = submitOrderAsync orderDetails
-                    match orderResult with
-                    | Ok orderID ->
-                        printfn "Order Submitted: %s" orderID
-                        let! statusResult = retrieveAndUpdateOrderStatus orderID orderDetails
-                        match statusResult with
-                        | Ok orderUpdate ->
-                            printfn "Order Update: %A" orderUpdate
-                            let updateEvent =
-                                match orderUpdate.FulfillmentStatus with
-                                | "FullyFulfilled" ->
-                                    printfn "Order Fully Fulfilled"
-                                    OrderProcessed orderUpdate
-                                | _ ->
-                                    printfn "Order Partially Fulfilled"
-                                    OrderFulfillmentUpdated orderUpdate
-                            return updateEvent
+        let errorMsg = "Maximal transaction value exceeded. Halting trading."
+        let errorEvent = DomainErrorRaised errorMsg
+        let notificationEvent = UserNotificationSent errorMsg
+        async {
+            match currentTransactionValue > parameters.maximalTransactionValue with
+            | true ->
+                match sendEmailNotification input.UserEmail "Transaction Limit Exceeded" errorMsg with
+                | Ok () -> printfn "Notification sent to %s" input.UserEmail
+                | Error errMsg -> printfn "Failed to send notification: %s" errMsg
+                return (acc, results @ [notificationEvent; errorEvent])
+            | false ->
+                let result =
+                    async {
+                        let! orderResult = submitOrderAsync orderDetails
+                        match orderResult with
+                        | Ok orderID ->
+                            printfn "Order Submitted: %s" orderID
+                            let! statusResult = retrieveAndUpdateOrderStatus orderID orderDetails
+                            match statusResult with
+                            | Ok orderUpdate ->
+                                printfn "Order Update: %A" orderUpdate
+                                let updateEvent =
+                                    match orderUpdate.FulfillmentStatus with
+                                    | "FullyFulfilled" ->
+                                        printfn "Order Fully Fulfilled"
+                                        OrderProcessed orderUpdate
+                                    | _ ->
+                                        printfn "Order Partially Fulfilled"
+                                        OrderFulfillmentUpdated orderUpdate
+                                return updateEvent
+                            | Error errMsg ->
+                                return UserNotificationSent errMsg
                         | Error errMsg ->
                             return UserNotificationSent errMsg
-                    | Error errMsg ->
-                        return UserNotificationSent errMsg
-                } |> Async.RunSynchronously
-            (currentTransactionValue, results @ [result])
+                    } |> Async.RunSynchronously
+                return (currentTransactionValue, results @ [result])
+        } |> Async.RunSynchronously
     input.Orders
     |> List.fold processOrder (0m, [])
     |> snd
@@ -267,3 +378,15 @@ let workflowProcessOrders (input: InvokeOrderProcessing) (parameters: TradingPar
         | UserNotificationSent message -> printfn "Notification: %s" message
         | OrderProcessed update -> printfn "Processed Update: %A" update
         | _ -> ())
+
+// Test the process order workflow
+// let testNotificationOnMaxTransaction() =
+//     // Test parameters
+//     let tradingParameters = { maximalTransactionValue = 100m }
+//     let userEmail = "ashishkj@andrew.cmu.edu"
+//     let orderDetails = 
+//         [{ Currency = "FET"; Price = 58.06; OrderType = "Buy"; Quantity = 22.45; Exchange = "Bitstamp" }]
+//     let input = { Orders = orderDetails; UserEmail = userEmail }
+
+//     // Run the workflow process
+//     workflowProcessOrders input tradingParameters
