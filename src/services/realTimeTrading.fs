@@ -80,9 +80,10 @@ let isProfitable (bidPrice: PriceQuote) (askPrice: PriceQuote) =
 
 let getExchangeNameById (id: string) =
     match id with
-    | "1" -> Some "Kraken"
-    | "2" -> Some "Bitstamp"
-    | "3" -> Some "Bitfinex"
+    | "1" -> Some "Coinbase"
+    | "2" -> Some "Bitfinex"
+    | "6" -> Some "Bitstamp"
+    | "23" -> Some "Kraken"
     | _ -> None
 
 let executeArbitrageTrade (exchange1: string) (exchange2: string) (pair: string) (bidQuote: PriceQuote) (askQuote: PriceQuote) =
