@@ -116,7 +116,7 @@ let executeArbitrageTrade (exchange1: string) (exchange2: string) (pair: string)
             printfn "\nExecuting orders: %A\n" orders
             let invokeProcessing = {
                 Orders = orders;
-                UserEmail = "user@example.com"; 
+                UserEmail = "ashishkj@andrew.cmu.edu"; 
             }
             let tradingParameters = {
                 maximalTransactionValue = decimal tradingConfig.MaxTransactionAmount
