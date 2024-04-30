@@ -66,7 +66,7 @@ let isProfitable (bidPrice: PriceQuote) (askPrice: PriceQuote) =
         printfn "Configuration loaded: %A" config
         // Now you can use 'config' wherever needed in your application
         let spread = bidPrice.Price - askPrice.Price
-        let profit = (spread * (min bidPrice.Size askPrice.Size))+10.0M
+        let profit = (spread * (min bidPrice.Size askPrice.Size))
         let transactionAmount = (bidPrice.Price * bidPrice.Size + askPrice.Price * askPrice.Size)
         printfn "spread: %M. profit: %M. transactionAmount: %M. tradingValue: %M" spread profit transactionAmount tradingValue
         let b1 = (spread > config.MinSpread)
